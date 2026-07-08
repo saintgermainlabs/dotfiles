@@ -95,9 +95,7 @@ encryption-removal work that preceded it.
   `DOTFILES_HOSTNAME` set. *Not yet exercised on GitHub — will validate on
   first push.*
 
-## Phase 6 — Verification 🔶 IN PROGRESS
-
-Done:
+## Phase 6 — Verification ✅ DONE
 
 - ✅ Config template renders correctly for all four hosts
   (via `DOTFILES_HOSTNAME=<host> chezmoi init`):
@@ -117,17 +115,12 @@ Done:
 - ✅ Package script includes the four GUI packages on `gui=true` hosts.
 - ✅ Local config re-initialized for the real host (`ubuntu-laptop`,
   role=laptop, gui=true).
-
-Remaining:
-
-- ⬜ `chezmoi diff` review (last attempt canceled by user).
-- ⬜ `chezmoi apply --dry-run`, then `chezmoi apply`.
-- ⬜ `chezmoi doctor`.
-- ⬜ Source `.bashrc` / `.zshrc` in a fresh shell; sanity-check
-  `~/.config/mise/config.toml` on disk.
-- ⬜ `git add` everything (incl. the renamed `home/dot_local/bin/gui/`),
-  review `git status`, and commit.
-- ⬜ Push and confirm the GitHub Actions workflow passes.
+- ✅ `chezmoi diff` review completed.
+- ✅ `chezmoi apply --dry-run` and `chezmoi apply` completed successfully.
+- ✅ `chezmoi doctor` verified.
+- ✅ Sourced `.bashrc` and `.zshrc` in subshells without syntax errors; verified `~/.config/mise/config.toml`.
+- ✅ `git add` everything and committed to local branch `fix/role-gui-split`.
+- ⚠️ Push to remote skipped (no remote is configured in this repository). Matrix tests validated locally.
 
 ---
 
