@@ -1,0 +1,27 @@
+# Optional shell integrations. Each block checks that the tool exists first so
+# this file can be shared across machines that may not have every CLI installed.
+
+# mise manages language/tool versions and injects its shims into the shell.
+if command -v mise &> /dev/null; then
+  eval "$(mise activate zsh)"
+fi
+
+# zoxide replaces `cd` with frecency-based directory jumping.
+if command -v zoxide &> /dev/null; then
+  eval "$(zoxide init zsh --cmd cd)"
+fi
+
+# starship owns the prompt when installed; bash/prompt remains the fallback.
+if command -v starship &> /dev/null; then
+  eval "$(starship init zsh)"
+fi
+
+# fzf completion and keybindings are packaged as separate optional files on Ubuntu.
+if command -v fzf &> /dev/null; then
+  if [[ -f /usr/share/zsh/vendor-completions/_fzf ]]; then
+    source /usr/share/zsh/vendor-completions/_fzf
+  fi
+  if [[ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]]; then
+    source /usr/share/doc/fzf/examples/key-bindings.zsh
+  fi
+fi

@@ -1,0 +1,186 @@
+# Common functions used across hosts.
+
+# Create a gzip-compressed tarball from a file or directory.
+compress() { tar -czf "${1%/}.tar.gz" "${1%/}"; }
+alias decompress="tar -xzf"
+
+# Convert webm files to mp4.
+webm2mp4() {
+  input_file="$1"
+  output_file="${input_file%.webm}.mp4"
+  ffmpeg -i "$input_file" -c:v libx264 -preset slow -crf 22 -c:a aac -b:a 192k "$output_file"
+}
+
+# Write an ISO image to an SD card / USB device.
+iso2sd() {
+  if [ $# -ne 2 ]; then
+    echo "Usage: iso2sd <input_file> <output_device>"
+    echo "Example: iso2sd ~/Downloads/ubuntu.iso /dev/sda"
+    echo -e "\nAvailable SD cards:"
+    lsblk -d -o NAME | grep -E '^sd[a-z]' | awk '{print "/dev/"$1}'
+  else
+    sudo dd bs=4M status=progress oflag=sync if="$1" of="$2"
+    sudo eject "$2"
+  fi
+}
+
+# Activate a Python virtual environment in the current directory tree.
+venv() {
+  local candidate candidates=()
+  for candidate in .venv venv .env env; do
+    if [ -f "$candidate/bin/activate" ]; then
+      candidates+=("$candidate")
+    fi
+  done
+
+  if [ ${#candidates[@]} -eq 0 ]; then
+    while IFS= read -r path; do
+      [ -n "$path" ] && candidates+=("${path%/bin/activate}")
+    done < <(find . -maxdepth 3 -name activate -path '*/bin/activate' 2>/dev/null)
+  fi
+
+  if [ ${#candidates[@]} -eq 0 ]; then
+    echo "venv: No virtual environment found." >&2
+    return 1
+  elif [ ${#candidates[@]} -eq 1 ]; then
+    source "${candidates[0]}/bin/activate"
+  else
+    local selected=""
+    if command -v fzf &>/dev/null; then
+      selected=$(printf '%s\n' "${candidates[@]}" | fzf --prompt="Select virtual env > " --height=40% --reverse)
+    else
+      echo "Multiple virtual environments found. Select one:"
+      local i=1
+      for candidate in "${candidates[@]}"; do
+        printf "  [%d] %s\n" "$i" "$candidate"
+        ((i++))
+      done
+      printf "  > "
+      read -r choice
+      if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#candidates[@]} )); then
+        selected="${candidates[$((choice-1))]}"
+      fi
+    fi
+
+    if [ -n "$selected" ]; then
+      source "$selected/bin/activate"
+    else
+      echo "venv: activation cancelled." >&2
+      return 1
+    fi
+  fi
+}
+
+# Print a manual of aliases and functions from dotfiles shell modules.
+manual() {
+  local pattern="$1"
+  local shell_dir="$HOME/.dotfiles/dot_dotfiles"
+  local files=(
+    "$shell_dir/bash/aliases"
+    "$shell_dir/bash/functions"
+    "$shell_dir/bash/ssh"
+    "$shell_dir/bash/server"
+  )
+
+  local title name arrow reset
+  if [ -t 1 ]; then
+    title=$'\033[1;35m'
+    name=$'\033[1;33m'
+    arrow=$'\033[2;37m'
+    reset=$'\033[0m'
+  fi
+
+  local total=0
+  local file
+  for file in "${files[@]}"; do
+    [ -f "$file" ] || continue
+    local rel="${file#$shell_dir/}"
+    local file_header_shown=0
+
+    while IFS= read -r line || [ -n "$line" ]; do
+      if [[ "$line" =~ ^alias[[:space:]]+([^=]+)=(.*)$ ]]; then
+        local nm="${BASH_REMATCH[1]}"
+        local body="${BASH_REMATCH[2]}"
+        body="${body#[\"\']}"; body="${body%[\"\']}"
+        if [ -n "$pattern" ] && ! grep -qi -- "$pattern" <<<"$nm $body"; then
+          continue
+        fi
+        if [ "$file_header_shown" -eq 0 ]; then
+          printf "\n${title}══ %s ══${reset}\n" "$rel"
+          file_header_shown=1
+        fi
+        printf "  ${name}%-26s${arrow} → ${reset}%s\n" "$nm" "$body"
+        ((total++))
+      elif [[ "$line" =~ ^([a-zA-Z_][a-zA-Z0-9_-]*)[[:space:]]*\(\) ]] || [[ "$line" =~ ^function[[:space:]]+([a-zA-Z_][a-zA-Z0-9_-]*) ]]; then
+        local nm="${BASH_REMATCH[1]}"
+        if [ -n "$pattern" ] && ! grep -qi -- "$pattern" <<<"$nm"; then
+          continue
+        fi
+        if [ "$file_header_shown" -eq 0 ]; then
+          printf "\n${title}══ %s ══${reset}\n" "$rel"
+          file_header_shown=1
+        fi
+        printf "  ${name}%-26s${reset}\n" "$nm()"
+        ((total++))
+      fi
+    done < "$file"
+  done
+
+  if [ -n "$pattern" ] && [ "$total" -eq 0 ]; then
+    echo "manual: no matches for: $pattern" >&2
+    return 1
+  fi
+  echo
+}
+
+# List aliases from the common aliases file.
+aliases() {
+  local pattern="$1"
+  local file="$HOME/.dotfiles/dot_dotfiles/bash/aliases"
+
+  if [ ! -f "$file" ]; then
+    echo "aliases: $file not found" >&2
+    return 1
+  fi
+
+  local hdr name arrow reset
+  if [ -t 1 ]; then
+    hdr=$'\033[1;36m'; name=$'\033[1;33m'; arrow=$'\033[2;37m'; reset=$'\033[0m'
+  fi
+
+  local section="" section_shown=0 count=0
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [[ "$line" =~ ^#(.*)$ ]]; then
+      local c="${BASH_REMATCH[1]}"
+      c="${c# }"
+      if [[ "$c" =~ ^[A-Z] ]] && [[ ! "$c" =~ [.,:!?] ]] && [ "$(wc -w <<<"$c")" -le 4 ]; then
+        section="$c"; section_shown=0
+      fi
+      continue
+    fi
+
+    if [[ "$line" =~ ^alias[[:space:]]+([^=]+)=(.*)$ ]]; then
+      local a_name="${BASH_REMATCH[1]}"
+      local a_cmd="${BASH_REMATCH[2]}"
+      a_cmd="${a_cmd#[\"\']}"; a_cmd="${a_cmd%[\"\']}"
+
+      if [ -n "$pattern" ] && ! grep -qi -- "$pattern" <<<"$a_name $a_cmd"; then
+        continue
+      fi
+
+      if [ "$section_shown" -eq 0 ] && [ -n "$section" ]; then
+        printf "\n${hdr}── %s ──${reset}\n" "$section"
+        section_shown=1
+      fi
+      printf "  ${name}%-22s${arrow} → ${reset}%s\n" "$a_name" "$a_cmd"
+      ((count++))
+    fi
+  done < "$file"
+
+  if [ -n "$pattern" ] && [ "$count" -eq 0 ]; then
+    echo "No aliases matching: $pattern" >&2
+    return 1
+  fi
+  echo
+}

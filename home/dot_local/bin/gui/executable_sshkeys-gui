@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# sshkeys-gui — zenity dialog that lists a user's SSH public keys.
+#
+# Category: Security.
+# Selecting a row copies that key's contents to the clipboard.
+#
+# Usage:
+#   sshkeys-gui          prompt for username
+#   sshkeys-gui <user>   skip the prompt
+
+user="${1:-}"
+
+if [[ -z "$user" ]]; then
+    user=$(zenity --entry \
+        --title="SSH keys" \
+        --text="Show SSH keys for which user?" \
+        --entry-text="$USER") || exit 0
+fi
+
+if [[ "$user" == "root" ]]; then
+    home="/root"
+else
+    home=$(getent passwd "$user" | cut -d: -f6)
+fi
+
+if [[ -z "$home" ]]; then
+    zenity --error --title="SSH keys" --text="User '$user' not found." --width=320
+    exit 1
+fi
+
+ssh_dir="$home/.ssh"
+
+sudo_cmd=""
+[[ "$user" != "$USER" ]] && sudo_cmd="sudo"
+
+if ! $sudo_cmd test -d "$ssh_dir"; then
+    zenity --error --title="SSH keys" --text="$ssh_dir does not exist." --width=320
+    exit 1
+fi
+
+rows=()
+while IFS= read -r pub; do
+    [[ -z "$pub" ]] && continue
+    name=$(basename "$pub")
+    info=$($sudo_cmd ssh-keygen -l -f "$pub" 2>/dev/null) || info=""
+    bits=$(awk '{print $1}'    <<<"$info")
+    fp=$(awk   '{print $2}'    <<<"$info")
+    type=$(grep -oP '\([^)]+\)$' <<<"$info" | tr -d '()')
+    comment=$(awk '{$1=$2=""; sub(/ *\([^)]+\) *$/,""); sub(/^ +/,""); print}' <<<"$info")
+    rows+=("$name" "$type" "$bits" "$fp" "$comment")
+done < <($sudo_cmd find "$ssh_dir" -maxdepth 1 -name '*.pub' -type f 2>/dev/null | sort)
+
+if (( ${#rows[@]} == 0 )); then
+    zenity --info --title="SSH keys" --text="No public keys found in $ssh_dir." --width=320
+    exit 0
+fi
+
+selected=$(zenity --list \
+    --title="SSH keys — $user" \
+    --text="$ssh_dir   ·   double-click or OK to copy" \
+    --width=820 --height=420 \
+    --column="File" --column="Type" --column="Bits" --column="Fingerprint" --column="Comment" \
+    --print-column=1 \
+    "${rows[@]}") || exit 0
+
+[[ -z "$selected" ]] && exit 0
+
+contents=$($sudo_cmd cat "$ssh_dir/$selected")
+
+if command -v wl-copy &>/dev/null; then
+    printf '%s' "$contents" | wl-copy
+elif command -v xclip &>/dev/null; then
+    printf '%s' "$contents" | xclip -selection clipboard
+elif command -v xsel &>/dev/null; then
+    printf '%s' "$contents" | xsel --clipboard --input
+else
+    zenity --warning --title="SSH keys" \
+        --text="No clipboard tool found. Showing key instead:\n\n$contents" --width=640
+    exit 1
+fi
+
+notify-send -i emblem-system "SSH keys" "Copied $selected to clipboard."

@@ -1,0 +1,107 @@
+# SSH helpers — key management and host-key utilities.
+
+# Generate a root ed25519 SSH key (no passphrase, hostname-tagged comment).
+alias gen-root-sshkey='sudo ssh-keygen -t ed25519 -N "" -f /root/.ssh/id_ed25519 -C "root@$(hostname)"'
+
+# Forget the dev server's host key after a reinstall or key rotation.
+alias forget-server-hostkey='ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$REMOTE_HOST"'
+
+# List SSH public keys for a user; optionally pick one and copy it to clipboard.
+# Usage: sshkeys [user] [copy] [name]
+sshkeys() {
+  local user action keyname
+  if [ "$1" = "copy" ]; then
+    user="$USER"; action="copy"; keyname="$2"
+  elif [ "$2" = "copy" ]; then
+    user="$1"; action="copy"; keyname="$3"
+  else
+    user="${1:-$USER}"
+  fi
+
+  local home
+  if [ "$user" = "root" ]; then
+    home="/root"
+  else
+    home=$(getent passwd "$user" | cut -d: -f6)
+  fi
+  if [ -z "$home" ]; then
+    echo "sshkeys: user '$user' not found" >&2
+    return 1
+  fi
+
+  local ssh_dir="$home/.ssh"
+  local sudo_cmd=""
+  [ "$user" != "$USER" ] && sudo_cmd="sudo"
+
+  if ! $sudo_cmd test -d "$ssh_dir"; then
+    echo "sshkeys: $ssh_dir does not exist" >&2
+    return 1
+  fi
+
+  local pubs
+  pubs=$($sudo_cmd find "$ssh_dir" -maxdepth 1 -name '*.pub' -type f 2>/dev/null | sort)
+  if [ -z "$pubs" ]; then
+    echo "sshkeys: no public keys found in $ssh_dir" >&2
+    return 1
+  fi
+
+  if [ "$action" != "copy" ]; then
+    printf "\n  SSH public keys for %s (%s):\n\n" "$user" "$ssh_dir"
+    while IFS= read -r pub; do
+      local fp
+      fp=$($sudo_cmd ssh-keygen -l -f "$pub" 2>/dev/null)
+      printf "  %-28s  %s\n" "$(basename "$pub")" "$fp"
+    done <<< "$pubs"
+    echo
+    return 0
+  fi
+
+  local selected
+  if [ -n "$keyname" ]; then
+    [ "${keyname%.pub}" = "$keyname" ] && keyname="${keyname}.pub"
+    selected="$ssh_dir/$keyname"
+    if ! $sudo_cmd test -f "$selected"; then
+      echo "sshkeys: $selected not found" >&2
+      return 1
+    fi
+  elif command -v fzf &>/dev/null; then
+    selected=$(echo "$pubs" | fzf --prompt="Pick a key to copy > " --height=40% --reverse \
+      --preview="${sudo_cmd:+sudo }cat {}")
+  else
+    echo "Pick a key:"
+    local i=1 lines=()
+    while IFS= read -r pub; do
+      lines+=("$pub")
+      printf "  [%d] %s\n" "$i" "$(basename "$pub")"
+      ((i++))
+    done <<< "$pubs"
+    printf "  > "
+    local choice
+    read -r choice
+    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#lines[@]} )); then
+      selected="${lines[$((choice-1))]}"
+    fi
+  fi
+
+  if [ -z "$selected" ]; then
+    echo "sshkeys: nothing selected" >&2
+    return 1
+  fi
+
+  local contents
+  contents=$($sudo_cmd cat "$selected")
+
+  if command -v wl-copy &>/dev/null; then
+    printf '%s' "$contents" | wl-copy
+  elif command -v xclip &>/dev/null; then
+    printf '%s' "$contents" | xclip -selection clipboard
+  elif command -v xsel &>/dev/null; then
+    printf '%s' "$contents" | xsel --clipboard --input
+  else
+    echo "sshkeys: no clipboard tool found. Key contents:" >&2
+    echo "$contents"
+    return 1
+  fi
+
+  echo "Copied $(basename "$selected") to clipboard."
+}

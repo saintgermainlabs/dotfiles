@@ -1,0 +1,9 @@
+[tools]
+{{- $tools := merge .tools.common (index .tools .role) -}}
+{{- if .gui }}{{ $tools = merge $tools .tools.gui }}{{ end -}}
+{{- range $tool, $version := $tools }}
+{{ $tool }} = {{ $version | quote }}
+{{- end }}
+
+[settings]
+experimental = true

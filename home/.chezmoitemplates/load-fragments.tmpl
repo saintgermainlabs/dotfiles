@@ -1,0 +1,11 @@
+{{- range $name, $contexts := .fragments -}}
+{{-   $enabled := false -}}
+{{-   range $contexts -}}
+{{-     if or (eq . $.role) (and (eq . "gui") $.gui) -}}
+{{-       $enabled = true -}}
+{{-     end -}}
+{{-   end -}}
+{{-   if $enabled }}
+[ -r "${DF_DIR}/fragments/{{ $name }}" ] && . "${DF_DIR}/fragments/{{ $name }}"
+{{-   end -}}
+{{- end -}}

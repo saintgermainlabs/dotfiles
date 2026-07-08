@@ -1,0 +1,14 @@
+[hosts."ubuntu-laptop"]
+role = "laptop"
+gui  = true
+tags = ["personal", "primary"]
+
+[hosts."ubuntu-24"]
+role = "server"
+gui  = false
+tags = ["homelab", "coolify-host"]
+
+[hosts."vm-dev01"]
+role = "vm"
+gui  = false
+tags = ["ephemeral"]

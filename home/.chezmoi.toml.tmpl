@@ -1,0 +1,19 @@
+{{- /* DOTFILES_HOSTNAME lets CI/tests render the config as if on another host. */ -}}
+{{- $hostname := env "DOTFILES_HOSTNAME" | default .chezmoi.hostname -}}
+{{- /* .chezmoidata is not available while rendering the config template, so read hosts.toml directly. */ -}}
+{{- $hosts := joinPath .chezmoi.sourceDir ".chezmoidata/hosts.toml" | include | fromToml -}}
+{{- $role := dig $hostname "role" "server" $hosts.hosts -}}
+{{- $gui  := dig $hostname "gui"  false    $hosts.hosts -}}
+{{- $tags := dig $hostname "tags" list     $hosts.hosts -}}
+
+[data]
+    role = {{ $role | quote }}
+    # unrecognized hostnames fall back to "server"/gui=false —
+    # the least-privileged, least-GUI configuration. Do not invert this default.
+    gui  = {{ $gui }}
+    tags = {{ $tags | toJson }}
+    hostname = {{ $hostname | quote }}
+
+    github_user = "saintgermainlabs"
+    git_name    = "Saint Germain Labs"
+    git_email   = "saintgermainlabs@gmail.com"

@@ -1,0 +1,199 @@
+# List containers
+
+cps() {
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+}
+
+# Search containers by partial name
+
+cfind() {
+docker ps -a --format "{{.Names}}" | grep -i "$1"
+
+}
+
+# Get first matching container name
+
+_cmatch() {
+docker ps -a --format "{{.Names}}" | grep -i "$1" | head -n1
+}
+
+# Logs
+
+clogs() {
+local c=$(_cmatch "$1")
+[ -z "$c" ] && echo "No container found" && return 1
+docker logs --tail=100 -f "$c"
+}
+
+# Inspect
+
+cinspect() {
+local c=$(_cmatch "$1")
+[ -z "$c" ] && echo "No container found" && return 1
+docker inspect "$c"
+}
+
+# Shell
+
+csh() {
+local c=$(_cmatch "$1")
+[ -z "$c" ] && echo "No container found" && return 1
+
+docker exec -it "$c" sh 2>/dev/null || \
+docker exec -it "$c" bash
+
+}
+
+# Restart
+
+crestart() {
+local c=$(_cmatch "$1")
+[ -z "$c" ] && echo "No container found" && return 1
+docker restart "$c"
+}
+
+# Container IP
+
+cip() {
+local c=$(_cmatch "$1")
+[ -z "$c" ] && echo "No container found" && return 1
+
+docker inspect \
+-f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' \
+"$c"
+
+}
+
+# Networks
+
+cnet() {
+local c=$(_cmatch "$1")
+[ -z "$c" ] && echo "No container found" && return 1
+
+docker inspect \
+-f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' \
+"$c"
+
+}
+
+# Health
+
+chealth() {
+local c=$(_cmatch "$1")
+[ -z "$c" ] && echo "No container found" && return 1
+
+docker inspect \
+-f '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' \
+"$c"
+
+}
+
+# Test HTTP from inside container
+
+ccurl() {
+local c=$(_cmatch "$1")
+local port=${2:-80}
+
+[ -z "$c" ] && echo "No container found" && return 1
+
+docker exec "$c" sh -c \
+"which curl >/dev/null && curl -I http://localhost:${port} || wget --spider http://localhost:${port}"
+
+}
+
+# Show exposed ports
+
+cports() {
+local c=$(_cmatch "$1")
+[ -z "$c" ] && echo "No container found" && return 1
+
+docker port "$c"
+
+}
+
+# Quick diagnostic
+
+cdiag() {
+local c=$(_cmatch "$1")
+
+[ -z "$c" ] && echo "No container found" && return 1
+
+echo "Container: $c"
+echo
+
+echo "Status:"
+docker inspect -f '{{.State.Status}}' "$c"
+
+echo
+echo "Health:"
+docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}No healthcheck{{end}}' "$c"
+
+echo
+echo "Networks:"
+docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' "$c"
+
+echo
+echo "IP:"
+docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$c"
+
+echo
+echo "Ports:"
+docker port "$c"
+
+echo
+echo "Recent Logs:"
+docker logs --tail=20 "$c"
+
+}
+
+# Coolify-specific helpers
+
+coolify() {
+cfind coolify
+}
+
+traefik() {
+cfind traefik
+}
+
+nextcloud() {
+cfind nextcloud
+}
+
+
+
+
+cresource() {
+for c in $(docker ps -a --format '{{.Names}}'); do
+
+resource=$(docker inspect \
+-f '{{index .Config.Labels "coolify.resourceName"}}' \
+"$c" 2>/dev/null)
+
+if echo "$resource" | grep -iq "$1"; then
+echo "$c"
+fi
+done
+}
+
+
+docker_inventory() {
+
+for c in $(docker ps -a --format '{{.Names}}'); do
+docker inspect "$c" \
+--format '{{.Name}} | {{index .Config.Labels "coolify.resourceName"}} | {{index .Config.Labels "com.docker.compose.service"}}'
+done
+
+}
+
+cservices() {
+printf "%-30s %-20s %-50s\n" "RESOURCE" "SERVICE" "CONTAINER"
+
+for c in $(docker ps --format '{{.Names}}'); do
+resource=$(docker inspect "$c" -f '{{index .Config.Labels "coolify.resourceName"}}' 2>/dev/null)
+service=$(docker inspect "$c" -f '{{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null)
+
+printf "%-30s %-20s %-50s\n" "$resource" "$service" "$c"
+done
+}
+

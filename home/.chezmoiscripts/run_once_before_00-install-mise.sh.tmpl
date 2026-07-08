@@ -1,0 +1,19 @@
+#!/bin/bash
+# Install mise if it is not already available.
+set -euo pipefail
+
+if command -v mise >/dev/null 2>&1; then
+  echo "mise is already installed: $(mise --version)"
+  exit 0
+fi
+
+echo "Installing mise..."
+curl https://mise.run | sh
+
+export PATH="$HOME/.local/bin:$PATH"
+if ! command -v mise >/dev/null 2>&1; then
+  echo "Failed to install mise. Please install it manually from https://mise.run" >&2
+  exit 1
+fi
+
+echo "mise installed: $(mise --version)"

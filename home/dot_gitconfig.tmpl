@@ -1,0 +1,28 @@
+[user]
+    name = {{ .git_name | quote }}
+{{- if .git_email }}
+    email = {{ .git_email | quote }}
+{{- end }}
+
+[core]
+    editor = nvim
+    autocrlf = input
+
+[init]
+    defaultBranch = main
+
+[push]
+    default = simple
+
+[pull]
+    rebase = false
+
+[color]
+    ui = auto
+
+[alias]
+    st = status
+    co = checkout
+    br = branch
+    ci = commit
+    lg = log --oneline --decorate --graph

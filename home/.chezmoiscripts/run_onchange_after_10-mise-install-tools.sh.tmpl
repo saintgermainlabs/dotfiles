@@ -1,0 +1,18 @@
+#!/bin/bash
+# Install and prune tools declared in ~/.config/mise/config.toml.
+# Re-runs automatically when the rendered mise config changes.
+# hash of config to force rerun on change: {{ include "dot_config/mise/config.toml.tmpl" | sha256sum }}
+set -euo pipefail
+
+export PATH="$HOME/.local/bin:$PATH"
+
+if ! command -v mise >/dev/null 2>&1; then
+  echo "mise not found; skipping tool installation." >&2
+  exit 0
+fi
+
+echo "Installing mise tools..."
+mise install
+mise prune -y
+
+echo "Mise tools ready."

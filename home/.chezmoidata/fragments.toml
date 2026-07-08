@@ -1,0 +1,13 @@
+# Optional shell fragments configuration
+# Fragments are loaded from dot_dotfiles/fragments/
+# Valid contexts: "laptop", "server", "vm", "gui"
+# "gui" is a machine attribute, not a role — it combines with any role.
+
+[fragments]
+# Fragments are shell-agnostic and can be loaded in both bash and zsh
+docker_functions = ["laptop", "server"]
+
+# Add more fragments here as needed
+# terraform_functions = ["laptop"]
+# k8s_functions = ["server"]
+# zsh_completions = ["gui"]

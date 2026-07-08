@@ -1,0 +1,36 @@
+#!/bin/bash
+# Install apt packages per role. Idempotent and safe to re-run.
+set -euo pipefail
+
+if ! command -v apt-get >/dev/null 2>&1; then
+  echo "apt-get not found; skipping package installation." >&2
+  exit 0
+fi
+
+PACKAGES=(
+{{- range .packages.common.list }}
+  {{ . | quote }}
+{{- end }}
+{{- $roleList := index .packages .role }}
+{{- range $roleList.list }}
+  {{ . | quote }}
+{{- end }}
+{{- if .gui }}
+{{- range .packages.gui.list }}
+  {{ . | quote }}
+{{- end }}
+{{- end }}
+)
+
+if [ ${#PACKAGES[@]} -eq 0 ]; then
+  echo "No packages to install for role {{ .role }}."
+  exit 0
+fi
+
+echo "Updating apt package lists..."
+sudo apt-get update
+
+echo "Installing packages for role {{ .role }}..."
+sudo apt-get install -y "${PACKAGES[@]}"
+
+echo "Package installation complete."

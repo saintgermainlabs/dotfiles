@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# hotkeys-gui — popup cheatsheet listing every GNOME custom keybinding.
+#
+# Category: System
+#
+# with a human-readable hotkey, its action name, and the command it runs.
+# Picking a row launches that command (handy as a "jump to action" launcher).
+
+SCHEMA="org.gnome.settings-daemon.plugins.media-keys"
+KB_SCHEMA="org.gnome.settings-daemon.plugins.media-keys.custom-keybinding"
+
+# Map raw keysym names to their visible character
+declare -A KEYSYMS=(
+    [grave]='`'      [asciitilde]='~'   [exclam]='!'       [at]='@'
+    [numbersign]='#' [dollar]='$'       [percent]='%'      [asciicircum]='^'
+    [ampersand]='&'  [asterisk]='*'     [parenleft]='('    [parenright]=')'
+    [minus]='-'      [underscore]='_'   [equal]='='        [plus]='+'
+    [bracketleft]='[' [bracketright]=']' [braceleft]='{'   [braceright]='}'
+    [backslash]='\'  [bar]='|'          [semicolon]=';'    [colon]=':'
+    [apostrophe]="'" [quotedbl]='"'     [comma]=','        [less]='<'
+    [period]='.'     [greater]='>'      [slash]='/'        [question]='?'
+    [space]='Space'  [Return]='Enter'   [Tab]='Tab'        [BackSpace]='Backspace'
+    [Delete]='Del'   [Escape]='Esc'
+)
+
+# If Shift is in the modifiers, translate the unshifted keysym to its shifted glyph
+declare -A SHIFTED=(
+    [grave]='~'  [1]='!'  [2]='@'  [3]='#'  [4]='$'  [5]='%'
+    [6]='^'      [7]='&'  [8]='*'  [9]='('  [0]=')'
+    [minus]='_'  [equal]='+'  [bracketleft]='{'  [bracketright]='}'
+    [backslash]='|' [semicolon]=':' [apostrophe]='"'
+    [comma]='<' [period]='>' [slash]='?'
+)
+
+pretty_binding() {
+    local b="$1"
+    b="${b#\'}"; b="${b%\'}"
+
+    local has_shift=0
+    [[ "$b" == *"<Shift>"* ]] && has_shift=1
+
+    b="${b//<Primary>/Ctrl+}"
+    b="${b//<Control>/Ctrl+}"
+    b="${b//<Ctrl>/Ctrl+}"
+    b="${b//<Shift>/Shift+}"
+    b="${b//<Alt>/Alt+}"
+    b="${b//<Super>/Super+}"
+    b="${b//<Meta>/Meta+}"
+
+    local key="${b##*+}"
+    local mods="${b%${key}}"
+
+    local pretty="$key"
+    if (( has_shift )) && [[ -n "${SHIFTED[$key]+_}" ]]; then
+        pretty="${SHIFTED[$key]}"
+    elif [[ -n "${KEYSYMS[$key]+_}" ]]; then
+        pretty="${KEYSYMS[$key]}"
+    fi
+
+    if [[ ${#pretty} -eq 1 && "$pretty" =~ [a-z] ]]; then
+        pretty="${pretty^^}"
+    fi
+
+    echo "${mods}${pretty}"
+}
+
+unquote() { local s="$1"; s="${s#\'}"; s="${s%\'}"; echo "$s"; }
+
+rows=()
+current=$(gsettings get "$SCHEMA" custom-keybindings)
+for entry in $(echo "$current" | grep -oE "/[^']+/"); do
+    name=$(unquote    "$(gsettings get "${KB_SCHEMA}:${entry}" name)")
+    cmd=$(unquote     "$(gsettings get "${KB_SCHEMA}:${entry}" command)")
+    binding=$(unquote "$(gsettings get "${KB_SCHEMA}:${entry}" binding)")
+    rows+=("$(pretty_binding "$binding")" "$name" "$cmd")
+done
+
+if (( ${#rows[@]} == 0 )); then
+    zenity --info --title="Hotkeys" --text="No custom keybindings set." --width=320
+    exit 0
+fi
+
+sorted=()
+mapfile -t indices < <(
+    for ((i=0; i<${#rows[@]}; i+=3)); do
+        printf '%s\t%d\n' "${rows[i]}" "$i"
+    done | sort -f | awk -F'\t' '{print $2}'
+)
+for i in "${indices[@]}"; do
+    sorted+=("${rows[i]}" "${rows[i+1]}" "${rows[i+2]}")
+done
+
+selected=$(zenity --list \
+    --title="Hotkeys cheatsheet" \
+    --text="Custom GNOME keybindings  ·  pick one to run it" \
+    --width=780 --height=480 \
+    --column="Hotkey" --column="Action" --column="Command" \
+    --print-column=3 \
+    "${sorted[@]}") || exit 0
+
+if [[ -n "$selected" ]]; then
+    setsid bash -c "$selected" >/dev/null 2>&1 </dev/null &
+fi

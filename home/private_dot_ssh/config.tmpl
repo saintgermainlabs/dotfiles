@@ -1,0 +1,77 @@
+Host *
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+
+{{- if eq .role "laptop" }}
+
+# GitHub
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519_dev
+    IdentitiesOnly yes
+
+# GitLab
+Host gitlab.com
+    HostName gitlab.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519_dev
+    IdentitiesOnly yes
+
+# Bitbucket
+Host bitbucket.org
+    HostName bitbucket.org
+    User git
+    IdentityFile ~/.ssh/id_ed25519_dev
+    IdentitiesOnly yes
+
+# Coolify
+Host 10.20.0.*
+    IdentityFile ~/.ssh/id_ed25519_coolify
+    IdentitiesOnly yes
+    User ubuntu
+
+Host 100.70.96.19
+    IdentityFile ~/.ssh/id_ed25519_server
+    User root
+
+Host antigravity
+    HostName 100.70.96.19
+    IdentityFile ~/.ssh/antigravity_key
+    IdentitiesOnly yes
+    User antigravity-admin
+
+Host ubuntu
+    HostName 100.70.96.19
+    IdentityFile ~/.ssh/ubuntu_server
+    IdentitiesOnly yes
+    User dom
+
+# Default for all other hosts
+Host *
+    IdentityFile ~/.ssh/id_ed25519_dev
+{{- end }}
+
+{{- range .servers.public }}
+Host {{ .name }}
+    HostName {{ .ip }}
+    User {{ .user }}
+{{- if hasKey . "port" }}
+    Port {{ .port }}
+{{- end }}
+{{- if hasKey . "identity_file" }}
+    IdentityFile {{ .identity_file }}
+{{- end }}
+{{- if hasKey . "proxy_jump" }}
+    ProxyJump {{ .proxy_jump }}
+{{- end }}
+{{- end }}
+
+{{- if (env "SSH_HETZNER_IP") }}
+Host hetzner
+    HostName {{ env "SSH_HETZNER_IP" }}
+    User {{ env "SSH_HETZNER_USER" }}
+    IdentityFile {{ env "SSH_HETZNER_KEY" }}
+{{- end }}
+
+# Default SSH configuration

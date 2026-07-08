@@ -1,0 +1,35 @@
+# ~/.dotfiles/zsh/rc: zsh startup configuration.
+
+DF_DIR="${HOME}/.dotfiles"
+
+# Core shell behavior: history, completion, PATH.
+[ -f "${DF_DIR}/zsh/shell" ] && source "${DF_DIR}/zsh/shell"
+
+# User-facing commands. Bash-compatible aliases and functions work in zsh too.
+source "${DF_DIR}/bash/aliases"
+source "${DF_DIR}/bash/functions"
+source "${DF_DIR}/bash/ssh"
+source "${DF_DIR}/bash/server"
+
+# UI and optional tool initialization.
+source "${DF_DIR}/bash/prompt"
+source "${DF_DIR}/zsh/init"
+
+# Zsh-specific completions
+autoload -Uz compinit
+compinit
+
+# Zsh history
+HISTFILE=~/.zsh_history
+setopt HIST_IGNORE_DUPS
+setopt HIST_IGNORE_SPACE
+setopt SHARE_HISTORY
+
+# Zsh key bindings
+bindkey -e
+
+# Better completion
+zstyle ':completion:*' menu select
+zstyle ':completion:*' group-name ''
+zstyle ':completion:*' list-colors ''
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'

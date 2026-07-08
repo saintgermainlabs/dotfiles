@@ -1,0 +1,22 @@
+# Rendered secrets / machine-local files
+*.env
+!*.env.example
+dot_dotfiles/bash/.env
+
+# Secret / private directories (keep .gitkeep placeholders)
+dot_dotfiles/secrets/*
+!dot_dotfiles/secrets/.gitkeep
+dot_dotfiles/bash/.private/*
+!dot_dotfiles/bash/.private/.gitkeep
+
+# Deprecated encryption-related files (may contain secrets; do not commit)
+deprecated_encryption/
+
+
+# macOS
+.DS_Store
+
+# Editor backups
+*~
+*.swp
+*.swo

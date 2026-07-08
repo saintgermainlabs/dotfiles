@@ -1,0 +1,20 @@
+#!/bin/bash
+# GUI-only setup: create Nautilus templates and ensure GUI helper scripts are executable.
+set -euo pipefail
+
+{{ if not .gui }}
+exit 0
+{{ end }}
+
+echo "Setting up GUI extras..."
+
+# Ensure Nautilus templates directory exists.
+mkdir -p "$HOME/Templates"
+
+# Ensure GUI helper scripts are executable.
+mkdir -p "$HOME/.local/bin/gui"
+for script in "$HOME/.local/bin/gui/"*; do
+  [ -f "$script" ] && chmod +x "$script"
+done
+
+echo "GUI setup complete."

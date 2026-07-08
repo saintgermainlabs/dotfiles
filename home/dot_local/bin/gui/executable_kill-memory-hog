@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# kill-memory-hog — emergency RAM recovery for a thrashing / frozen machine.
+#
+# Category: System
+#
+# Finds the current user's single largest-RSS process and SIGKILLs it, so a
+# runaway tab/build/script can be cleared without waiting for the OOM killer.
+# Fires instantly with no confirm — a dialog would itself be unresponsive once
+# the machine is swapping to death.
+#
+# Usage:
+#   kill-memory-hog            kill the top memory hog
+#   kill-memory-hog --dry-run  print what would be killed, kill nothing
+set -uo pipefail
+
+PROTECTED='^(systemd|systemd-.*|gnome-shell|gnome-session.*|gdm.*|gnome-keyring.*|Xorg|Xwayland|mutter.*|kwin_.*|plasmashell|dbus-daemon|dbus-broker|pipewire.*|wireplumber|pulseaudio|NetworkManager|ssh-agent|gvfsd.*|kill-memory-hog|bash|sh|zsh|fish|alacritty|gnome-terminal-|kitty|konsole)$'
+
+DRY_RUN=0
+[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
+
+notify() {
+    local urgency="$1" title="$2" body="$3"
+    command -v notify-send >/dev/null 2>&1 && notify-send -u "$urgency" "$title" "$body"
+    printf '%s: %s\n' "$title" "$body"
+}
+
+read -r pid rss comm < <(
+    ps -u "$(id -u)" -o pid=,rss=,comm= --sort=-rss 2>/dev/null \
+        | awk -v prot="$PROTECTED" '
+            { c=$3; for (i=4; i<=NF; i++) c=c" "$i }
+            c !~ prot { print $1, $2, c; exit }'
+)
+
+if [[ -z "${pid:-}" ]]; then
+    notify normal "Memory hog killer" "No killable process found."
+    exit 1
+fi
+
+mb=$(( rss / 1024 ))
+
+if (( DRY_RUN )); then
+    notify normal "Memory hog killer (dry run)" "Would kill $comm (PID $pid, ${mb} MB)"
+    exit 0
+fi
+
+if kill -9 "$pid" 2>/dev/null; then
+    notify critical "Memory hog killed" "$comm (PID $pid) — freed ~${mb} MB"
+else
+    notify critical "Memory hog killer" "Failed to kill $comm (PID $pid)."
+    exit 1
+fi

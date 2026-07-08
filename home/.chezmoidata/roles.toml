@@ -1,0 +1,81 @@
+# Role-driven and GUI-driven tool and package definitions.
+# Add a new role by adding [tools.<role>] and [packages.<role>] sections.
+# GUI-specific entries live in [tools.gui] and [packages.gui] and are merged
+# only when the host's data has gui = true.
+
+[tools.common]
+"go" = "1.23"
+"node" = "22"
+"python" = "3.12"
+"ripgrep" = "latest"
+"fzf" = "latest"
+"eza" = "latest"
+"bat" = "latest"
+"zoxide" = "latest"
+"fd" = "latest"
+
+[tools.laptop]
+"terraform" = "latest"
+"terraform-ls" = "latest"
+"lazygit" = "latest"
+"lazydocker" = "latest"
+"starship" = "latest"
+
+[tools.server]
+"lazygit" = "latest"
+"starship" = "latest"
+
+[tools.vm]
+"lazygit" = "latest"
+
+[tools.gui]
+# GUI-only tools go here (currently none).
+
+[packages.common]
+list = [
+  "git",
+  "curl",
+  "build-essential",
+  "tmux",
+  "htop",
+  "btop",
+  "ripgrep",
+  "fd-find",
+  "eza",
+  "bat",
+  "fzf",
+  "zoxide",
+  "gettext-base",
+]
+
+[packages.laptop]
+list = []   # role-specific, non-GUI packages only
+
+[packages.server]
+list = [
+  "ufw",
+  "fail2ban",
+  "rsync",
+  "vault",
+]
+
+[packages.vm]
+list = [
+  "rsync",
+]
+
+[packages.gui]
+list = [
+  "nautilus",
+  "nautilus-image-converter",
+  "wl-clipboard",
+  "zenity",
+]
+
+[servers]
+# Public servers (safe to commit). Private IPs and hostnames should be supplied
+# via local chezmoi data or environment variables, never committed here.
+public = [
+  { name = "github", ip = "github.com", user = "git", identity_file = "~/.ssh/id_ed25519_dev" },
+  { name = "gitlab", ip = "gitlab.com", user = "git", identity_file = "~/.ssh/id_ed25519_dev" },
+]

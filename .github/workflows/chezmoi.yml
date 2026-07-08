@@ -1,0 +1,36 @@
+name: chezmoi
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        host: [ubuntu-laptop, ubuntu-24, vm-dev01, unknown-host]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install chezmoi
+        run: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b "$HOME/.local/bin"
+
+      - name: Render config for ${{ matrix.host }}
+        env:
+          DOTFILES_HOSTNAME: ${{ matrix.host }}
+        run: |
+          "$HOME/.local/bin/chezmoi" init --source "$GITHUB_WORKSPACE" --apply=false
+          echo "--- rendered config ---"
+          cat "$HOME/.config/chezmoi/chezmoi.toml"
+
+      - name: Dry-run apply for ${{ matrix.host }}
+        env:
+          DOTFILES_HOSTNAME: ${{ matrix.host }}
+        run: |
+          "$HOME/.local/bin/chezmoi" apply --dry-run --verbose
+
+      - name: Clean up config between matrix hosts
+        run: rm -rf "$HOME/.config/chezmoi"
