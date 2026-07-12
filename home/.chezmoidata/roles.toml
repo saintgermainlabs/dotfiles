@@ -29,14 +29,6 @@
 "lazygit" = "latest"
 
 [tools.devops]
-"terraform" = "latest"
-"terraform-ls" = "latest"
-"lazygit" = "latest"
-"lazydocker" = "latest"
-"starship" = "latest"
-"kubectl" = "latest"
-"helm" = "latest"
-"k9s" = "latest"
 
 [tools.gui]
 # GUI-only tools go here (currently none).
@@ -75,15 +67,9 @@ list = [
 ]
 
 [packages.devops]
-list = [
-  "docker.io",
-  "docker-compose-v2",
-  "rsync",
-  "jq",
-  "yq",
-  "curl",
-  "wget",
-]
+# Devcontainers only get [packages.common]; role-specific provisioning
+# (docker etc.) is handled by the devcontainer image/features.
+list = []
 
 [packages.gui]
 list = [

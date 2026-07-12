@@ -31,22 +31,27 @@ if [ ${#PACKAGES[@]} -eq 0 ]; then
   exit 0
 fi
 
-# Filter out Docker packages if Docker is already available (e.g. devcontainer
-# features like docker-outside-of-docker install Docker CE, which conflicts
-# with Ubuntu's docker.io / docker-compose-v2 packages).
-if command -v docker >/dev/null 2>&1; then
+# Filter out Docker packages if Docker is already available or we are inside
+# a devcontainer (REMOTE_CONTAINERS is set by VS Code / Dev Containers).
+# Devcontainer features like docker-outside-of-docker install Docker CE, which
+# conflicts with Ubuntu's docker.io / docker-compose-v2 packages.
+if [ -n "${REMOTE_CONTAINERS:-}" ] || command -v docker >/dev/null 2>&1; then
   filtered=()
   for pkg in "${PACKAGES[@]}"; do
     case "$pkg" in
       docker.io|docker-compose-v2)
-        echo "Docker already installed ($(docker --version 2>/dev/null || echo 'version unknown')); skipping apt package '$pkg'."
+        if [ -n "${REMOTE_CONTAINERS:-}" ]; then
+          echo "Skipping apt package '$pkg': managed by devcontainer feature."
+        else
+          echo "Docker already installed ($(docker --version 2>/dev/null || echo 'version unknown')); skipping apt package '$pkg'."
+        fi
         ;;
       *)
         filtered+=("$pkg")
         ;;
     esac
   done
-  PACKAGES=("${filtered[@]}")
+  PACKAGES=("${filtered[@]:-}")
 fi
 
 if [ ${#PACKAGES[@]} -eq 0 ]; then
