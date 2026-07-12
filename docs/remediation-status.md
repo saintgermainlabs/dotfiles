@@ -1,6 +1,6 @@
 # Dotfiles Remediation — Implementation Status
 
-Last updated: 2026-07-07
+Last updated: 2026-07-12
 
 This document tracks progress against `dotfiles-remediation-plan.md` (detailed
 plan: `~/.windsurf/plans/repo-cleanup-remediation-9d38f8.md`), plus the earlier
@@ -124,6 +124,51 @@ encryption-removal work that preceded it.
 
 ---
 
+## Post-remediation improvements
+
+### 2026-07-12 — Devcontainer (devops role) Docker fix
+
+Problem: applying dotfiles inside a devcontainer tried to `apt install`
+`docker.io` / `docker-compose-v2`, conflicting with the Docker provided by the
+devcontainer image/features and crashing the setup.
+
+Changes (commit `dbed907`, pushed to `origin/main`):
+
+- **`home/.chezmoidata/roles.toml`**: `[packages.devops]` emptied — the
+  devcontainer gets only `[packages.common]` via apt; Docker and other
+  role-specific provisioning is handled by the devcontainer image/features.
+  `[tools.devops]` also emptied by the user (mise still installs
+  `[tools.common]`).
+- **`home/.chezmoiscripts/shared/run_once_before_01-install-packages.sh.tmpl`**:
+  permanent safety net that filters `docker.io` / `docker-compose-v2` out of
+  the apt list when `REMOTE_CONTAINERS` is set (VS Code devcontainer) or
+  `docker` is already on `PATH`. Also hardened the filter with
+  `PACKAGES=("${filtered[@]:-}")` so `set -u` survives an all-filtered list.
+
+Verified: rendered script passes `bash -n`; filter simulation with
+`REMOTE_CONTAINERS=true` skips both Docker packages and keeps the rest.
+
+### 2026-07-12 — Builtin age decryption (no `age` binary needed)
+
+Problem: encryption was re-introduced (`encryption = "age"` with 1Password-backed
+keys), but the `age` apt package had been removed from `[packages.common]`
+during Phase 0, and devcontainers install no role packages at all — so
+decryption would fail on hosts without the `age` binary.
+
+Change in `home/.chezmoi.toml.tmpl`:
+
+- `useBuiltin = true` added to `[age]` — chezmoi uses its built-in Go age
+  implementation, so **no host needs the external `age` binary**, including
+  devcontainers.
+
+Devcontainers still need the `op` CLI authenticated (service account token or
+mounted socket) for the ephemeral-key hooks; that requirement is unchanged.
+
+Verified: config renders correctly for the devops role
+(`DOTFILES_ROLE=devops`) with builtin age + ephemeral `/tmp` key + hooks.
+
+---
+
 ## Notable gotchas discovered along the way
 
 1. **`.chezmoidata` is not available in `.chezmoi.toml.tmpl`** — the config
@@ -134,3 +179,10 @@ encryption-removal work that preceded it.
    plain `mv`; the new path still needs `git add`.
 4. Template function names differ from other Go tooling: `include` (not
    `readFile`), `fromToml` (not `fromTOML`).
+5. **Devcontainers pull from the remote** — local uncommitted fixes have no
+   effect on devcontainer builds. Always commit *and push* before rebuilding
+   a devcontainer to test a fix.
+6. **Never install Docker via apt where Docker already exists** — devcontainer
+   features (e.g. docker-outside-of-docker) provide Docker CE; Ubuntu's
+   `docker.io`/`docker-compose-v2` conflict with it. Gate on
+   `REMOTE_CONTAINERS` and `command -v docker`.

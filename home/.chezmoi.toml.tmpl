@@ -35,6 +35,9 @@
 encryption = "age"
 
 [age]
+    # Builtin age implementation — no external `age` binary required on any
+    # host (the apt package was removed; devcontainers install no packages).
+    useBuiltin = true
 {{- if $isDevops }}
     # Devops role (devcontainer): ephemeral key fetched from 1Password via hooks.
     # The key is written to /tmp before apply and deleted after — never persisted.
