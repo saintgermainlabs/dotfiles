@@ -12,6 +12,14 @@
 # (gitignored) or as an environment variable before running chezmoi apply.
 set -euo pipefail
 
+# ── Role check: devops uses ephemeral key via chezmoi hooks ───────────
+ROLE="{{ .role }}"
+if [ "$ROLE" = "devops" ]; then
+  echo "devops role: age key managed by chezmoi hooks (ephemeral /tmp key)."
+  echo "Skipping persistent key setup at ~/.config/age/key.txt"
+  exit 0
+fi
+
 AGE_DIR="${HOME}/.config/age"
 AGE_KEY="${AGE_DIR}/key.txt"
 OP_ITEM_REF="op://Security Keys/chezmoi age key/key.txt"

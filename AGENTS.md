@@ -87,6 +87,32 @@ For dev containers, mount the 1Password socket from the host or use a Service
 Account token. The token must have access to the vault containing the age key
 item (`op://Security Keys/chezmoi age key/key.txt`).
 
+### Ephemeral age key for devops role
+
+The `devops` role (used by devcontainers) uses an **ephemeral age key** pattern
+instead of persisting the key to `~/.config/age/key.txt`:
+
+- `home/.chezmoi.toml.tmpl` sets `identity = "/tmp/chezmoi-age-key.txt"` when
+  `role == "devops"` and configures `hooks.read-source-state.pre` to fetch the
+  key from 1Password before apply, and `hooks.apply.post` to delete it after.
+- `home/.chezmoiscripts/run_once_before_02-setup-age-key.sh.tmpl` skips the
+  persistent key setup for the `devops` role (the hooks handle it).
+
+This means the age key exists on disk only for the duration of `chezmoi apply`.
+Each apply re-fetches it from 1Password, so `op` must be authenticated first.
+
+### DOTFILES_ROLE env var fallback
+
+Unknown hostnames (e.g. devcontainers with random container IDs) fall back to
+the `DOTFILES_ROLE` environment variable instead of defaulting to `server`:
+
+```toml
+{{- $role := dig $hostname "role" (env "DOTFILES_ROLE" | default "server") $hostsFile.hosts -}}
+```
+
+The devcontainer sets `DOTFILES_ROLE=devops` in `remoteEnv` so chezmoi picks up
+the correct role without needing the hostname in `hosts.toml`.
+
 ## Shell configuration
 
 Primary shell: `bash`. Optional: `zsh`.

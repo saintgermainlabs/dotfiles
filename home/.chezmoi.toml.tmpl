@@ -4,9 +4,11 @@
 {{- $hostsFile := joinPath .chezmoi.sourceDir ".chezmoidata/hosts.toml" | include | fromToml -}}
 {{- $modulesFile := joinPath .chezmoi.sourceDir ".chezmoidata/modules.toml" | include | fromToml -}}
 {{- $fragmentsFile := joinPath .chezmoi.sourceDir ".chezmoidata/fragments.toml" | include | fromToml -}}
-{{- $role := dig $hostname "role" "server" $hostsFile.hosts -}}
+{{- /* Fall back to DOTFILES_ROLE env var for unknown hostnames (e.g. devcontainers). */ -}}
+{{- $role := dig $hostname "role" (env "DOTFILES_ROLE" | default "server") $hostsFile.hosts -}}
 {{- $gui  := dig $hostname "gui"  false    $hostsFile.hosts -}}
 {{- $tags := dig $hostname "tags" list     $hostsFile.hosts -}}
+{{- $isDevops := eq $role "devops" -}}
 
 {{- /* Compute active modules */ -}}
 {{- $enabledModules := list -}}
@@ -55,5 +57,23 @@
 encryption = "age"
 
 [age]
+{{- if $isDevops }}
+    # Devops role (devcontainer): ephemeral key fetched from 1Password via hooks.
+    # The key is written to /tmp before apply and deleted after — never persisted.
+    identity = "/tmp/chezmoi-age-key.txt"
+{{- else }}
     identity = "~/.config/age/key.txt"
+{{- end }}
     recipient = "age1m7qs8zz9r2c9qqflahclxd0z6gfpeq44pawv7vwzw03a93dk4usscnxazq"
+
+{{- if $isDevops }}
+# Ephemeral age key hooks — fetch from 1Password before apply, delete after.
+# Requires `op` CLI to be authenticated (app integration or OP_SERVICE_ACCOUNT_TOKEN).
+[hooks.read-source-state.pre]
+    command = "bash"
+    args = ["-c", "op read 'op://Security Keys/chezmoi age key/key.txt' > /tmp/chezmoi-age-key.txt && chmod 600 /tmp/chezmoi-age-key.txt"]
+
+[hooks.apply.post]
+    command = "rm"
+    args = ["-f", "/tmp/chezmoi-age-key.txt"]
+{{- end }}
