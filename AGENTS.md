@@ -27,7 +27,7 @@ home/
 
 Two independent axes describe a host:
 
-- **Role**: what the machine *is*. One of `laptop`, `server`, `vm`.
+- **Role**: what the machine *is*. One of `laptop`, `server`, `vm`, `devops`.
   Controls role-specific shell helpers, SSH aliases, server packages, etc.
 - **GUI**: whether the machine has a graphical desktop. Boolean.
   Controls GUI packages, GUI helper scripts, Nautilus templates, autostart, etc.
@@ -60,7 +60,7 @@ Host metadata lives in `home/.chezmoidata/hosts.toml` and is read by
 3. Keep host-specific configuration minimal.
 4. All changes must be safe to re-apply.
 5. Production configuration must be conservative and security-focused.
-6. Every new feature should work on at least `laptop` and `server`.
+6. Every new feature should work on at least `laptop`, `server`, and `devops`.
 7. Never conflate `role` with `gui`.
 
 ## Secrets policy
@@ -96,6 +96,9 @@ and merged in `home/dot_config/mise/config.toml.tmpl`.
 - **Laptop** may include Docker, Node.js, GUI apps, development SDKs, and desktop configuration.
 - **Server** prioritizes security, stability, and a minimal footprint. Avoid GUI software.
 - **VM** stays lightweight and disposable.
+- **DevOps** is a dev container role with all common fragments, Docker, Kubernetes
+  (kubectl, helm, k9s), Terraform, and Coolify management tools. Designed for
+  containerized CI/CD and infrastructure-as-code workflows.
 
 ## SSH standards
 

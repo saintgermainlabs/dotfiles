@@ -1,8 +1,0 @@
-# History control
-HISTSIZE=32768
-SAVEHIST="${HISTSIZE}"
-
-PS1='%~ $ '
-
-# PATH
-export PATH="$HOME/bin:./bin:$HOME/.local/bin:$PATH"

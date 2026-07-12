@@ -1,0 +1,17 @@
+{{- /* source-bootstrap.tmpl: Emit shell source commands from bootstrap data.
+  Context must contain:
+    .bootstrap (dict from roles.toml [bootstrap])
+    .role      (current host role)
+    .shell     ("bash" or "zsh")
+  Usage:
+    {{ template "source-bootstrap.tmpl" dict "bootstrap" .bootstrap "role" .role "shell" "bash" }}
+*/ -}}
+{{- range .bootstrap.common }}
+[ -r "${DF_DIR}/{{ . }}" ] && . "${DF_DIR}/{{ . }}"
+{{- end }}
+{{- range index .bootstrap.shells .shell }}
+[ -r "${DF_DIR}/{{ . }}" ] && . "${DF_DIR}/{{ . }}"
+{{- end }}
+{{- range index .bootstrap.roles .role }}
+[ -r "${DF_DIR}/{{ . }}" ] && . "${DF_DIR}/{{ . }}"
+{{- end -}}

@@ -2,6 +2,8 @@
 *.env
 !*.env.example
 dot_dotfiles/bash/.env
+secrets/secrets.toml
+dot_dotfiles/dot_env/.env
 
 # Secret / private directories (keep .gitkeep placeholders)
 dot_dotfiles/secrets/*

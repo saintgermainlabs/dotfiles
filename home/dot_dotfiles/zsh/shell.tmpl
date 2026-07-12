@@ -1,0 +1,8 @@
+# History control
+HISTSIZE=32768
+SAVEHIST="${HISTSIZE}"
+
+PS1='%~ $ '
+
+# Build PATH from chezmoi data.
+{{ template "setup-path.tmpl" dict "paths" .paths }}

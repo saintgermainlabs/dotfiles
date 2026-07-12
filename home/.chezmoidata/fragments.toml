@@ -2,10 +2,16 @@
 # Fragments are loaded from dot_dotfiles/fragments/
 # Valid contexts: "laptop", "server", "vm", "gui"
 # "gui" is a machine attribute, not a role — it combines with any role.
+#
+# NOTE: Fragments declared by active modules in modules.toml are
+# automatically merged into this list at template-render time.
 
 [fragments]
 # Fragments are shell-agnostic and can be loaded in both bash and zsh
-docker_functions = ["laptop", "server"]
+docker_functions = ["laptop", "server", "devops"]
+tailscale_functions = ["laptop", "server", "vm", "devops"]
+multimedia_functions = ["laptop", "gui"]
+docs_functions = ["laptop", "server", "vm", "devops"]
 
 # Add more fragments here as needed
 # terraform_functions = ["laptop"]

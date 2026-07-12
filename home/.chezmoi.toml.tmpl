@@ -1,19 +1,51 @@
 {{- /* DOTFILES_HOSTNAME lets CI/tests render the config as if on another host. */ -}}
 {{- $hostname := env "DOTFILES_HOSTNAME" | default .chezmoi.hostname -}}
-{{- /* .chezmoidata is not available while rendering the config template, so read hosts.toml directly. */ -}}
-{{- $hosts := joinPath .chezmoi.sourceDir ".chezmoidata/hosts.toml" | include | fromToml -}}
-{{- $role := dig $hostname "role" "server" $hosts.hosts -}}
-{{- $gui  := dig $hostname "gui"  false    $hosts.hosts -}}
-{{- $tags := dig $hostname "tags" list     $hosts.hosts -}}
+{{- /* .chezmoidata is not available while rendering the config template, so read files via include. */ -}}
+{{- $hostsFile := joinPath .chezmoi.sourceDir ".chezmoidata/hosts.toml" | include | fromToml -}}
+{{- $modulesFile := joinPath .chezmoi.sourceDir ".chezmoidata/modules.toml" | include | fromToml -}}
+{{- $fragmentsFile := joinPath .chezmoi.sourceDir ".chezmoidata/fragments.toml" | include | fromToml -}}
+{{- $role := dig $hostname "role" "server" $hostsFile.hosts -}}
+{{- $gui  := dig $hostname "gui"  false    $hostsFile.hosts -}}
+{{- $tags := dig $hostname "tags" list     $hostsFile.hosts -}}
+
+{{- /* Compute active modules */ -}}
+{{- $enabledModules := list -}}
+{{- $_moduleTools := dict -}}
+{{- $_modulePackages := list -}}
+{{- $_moduleScripts := list -}}
+{{- $mergedFragments := $fragmentsFile.fragments | default dict -}}
+{{- range $modName, $mod := $modulesFile.modules -}}
+{{-   $active := false -}}
+{{-   range $mod.contexts -}}
+{{-     if or (eq . $role) (and (eq . "gui") $gui) -}}
+{{-       $active = true -}}
+{{-     end -}}
+{{-   end -}}
+{{-   if $active -}}
+{{-     $enabledModules = append $enabledModules $modName -}}
+{{-     range $tool := $mod.tools -}}{{-     $_moduleTools = set $_moduleTools $tool true -}}{{- end -}}
+{{-     range $pkg := $mod.packages -}}{{-     $_modulePackages = append $_modulePackages $pkg -}}{{- end -}}
+{{-     range $frag := $mod.fragments -}}{{-   $mergedFragments = set $mergedFragments $frag $mod.contexts -}}{{- end -}}
+{{-     range $script := $mod.scripts -}}{{-  $_moduleScripts = append $_moduleScripts $script -}}{{- end -}}
+{{-   end -}}
+{{- end -}}
 
 [data]
     role = {{ $role | quote }}
-    # unrecognized hostnames fall back to "server"/gui=false —
-    # the least-privileged, least-GUI configuration. Do not invert this default.
     gui  = {{ $gui }}
     tags = {{ $tags | toJson }}
     hostname = {{ $hostname | quote }}
-
     github_user = "saintgermainlabs"
     git_name    = "Saint Germain Labs"
     git_email   = "saintgermainlabs@gmail.com"
+    fragments = {{ $mergedFragments | toJson }}
+    module_enabled = {{ $enabledModules | toJson }}
+    module_tools   = {{ $_moduleTools | toJson }}
+    module_packages = {{ $_modulePackages | toJson }}
+    module_scripts  = {{ $_moduleScripts | toJson }}
+
+encryption = "age"
+
+[age]
+    identity = "~/.config/age/key.txt"
+    recipient = "age1m7qs8zz9r2c9qqflahclxd0z6gfpeq44pawv7vwzw03a93dk4usscnxazq"

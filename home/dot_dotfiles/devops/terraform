@@ -1,0 +1,86 @@
+# Terraform helpers — loaded for the devops role.
+# Requires: terraform, terraform-ls (installed via mise).
+
+# ── Workspace helpers ────────────────────────────────────────────────
+
+# List Terraform workspaces
+tf_workspaces() {
+  if ! command -v terraform &>/dev/null; then
+    echo "terraform: command not found" >&2
+    return 1
+  fi
+  terraform workspace list 2>/dev/null
+}
+
+# Switch to a Terraform workspace
+# Usage: tf_use <workspace-name>
+tf_use() {
+  local ws="$1"
+  [ -z "$ws" ] && { echo "Usage: tf_use <workspace-name>" >&2; return 1; }
+  terraform workspace select "$ws"
+}
+
+# Show the current Terraform workspace
+tf_current() {
+  if ! command -v terraform &>/dev/null; then
+    echo "terraform: command not found" >&2
+    return 1
+  fi
+  terraform workspace show 2>/dev/null
+}
+
+# ── Plan / Apply helpers ─────────────────────────────────────────────
+
+# Run terraform plan and save output to a timestamped file
+# Usage: tf_plan [plan-args...]
+tf_plan() {
+  if ! command -v terraform &>/dev/null; then
+    echo "terraform: command not found" >&2
+    return 1
+  fi
+  local outfile="plan-$(date +%Y%m%d-%H%M%S).tfplan"
+  terraform plan -out="$outfile" "$@"
+  echo "Plan saved to $outfile"
+}
+
+# Apply a saved plan file
+# Usage: tf_apply <plan-file>
+tf_apply() {
+  local plan="$1"
+  [ -z "$plan" ] && { echo "Usage: tf_apply <plan-file>" >&2; return 1; }
+  [ ! -f "$plan" ] && { echo "Plan file not found: $plan" >&2; return 1; }
+  terraform apply "$plan"
+}
+
+# ── State helpers ────────────────────────────────────────────────────
+
+# List all resources in the Terraform state
+tf_resources() {
+  if ! command -v terraform &>/dev/null; then
+    echo "terraform: command not found" >&2
+    return 1
+  fi
+  terraform state list 2>/dev/null
+}
+
+# Show details of a specific resource in the state
+# Usage: tf_show <resource-address>
+tf_show() {
+  local addr="$1"
+  [ -z "$addr" ] && { echo "Usage: tf_show <resource-address>" >&2; return 1; }
+  terraform state show "$addr"
+}
+
+# ── Quick diagnostics ────────────────────────────────────────────────
+
+# Show Terraform version, current workspace, and fmt status
+tf_diag() {
+  echo "=== Terraform Version ==="
+  terraform version 2>/dev/null || echo "terraform: not installed" >&2
+  echo
+  echo "=== Current Workspace ==="
+  terraform workspace show 2>/dev/null || echo "not in a terraform directory" >&2
+  echo
+  echo "=== Format Check ==="
+  terraform fmt -check -recursive 2>/dev/null && echo "All files formatted" || echo "Some files need formatting" >&2
+}

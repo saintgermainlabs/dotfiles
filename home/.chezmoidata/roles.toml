@@ -28,6 +28,16 @@
 [tools.vm]
 "lazygit" = "latest"
 
+[tools.devops]
+"terraform" = "latest"
+"terraform-ls" = "latest"
+"lazygit" = "latest"
+"lazydocker" = "latest"
+"starship" = "latest"
+"kubectl" = "latest"
+"helm" = "latest"
+"k9s" = "latest"
+
 [tools.gui]
 # GUI-only tools go here (currently none).
 
@@ -64,6 +74,17 @@ list = [
   "rsync",
 ]
 
+[packages.devops]
+list = [
+  "docker.io",
+  "docker-compose-v2",
+  "rsync",
+  "jq",
+  "yq",
+  "curl",
+  "wget",
+]
+
 [packages.gui]
 list = [
   "nautilus",
@@ -71,6 +92,28 @@ list = [
   "wl-clipboard",
   "zenity",
 ]
+
+[bootstrap]
+# Shell source files to load, in order, relative to $DF_DIR (~/.dotfiles).
+# "common" files are loaded regardless of role or shell.
+# "shells.<shell>" files are loaded for that specific shell.
+# "roles.<role>" files are additionally loaded when matching that role.
+
+common = [
+  "common/aliases",
+  "common/functions",
+  "common/prompt",
+]
+
+[bootstrap.shells]
+bash = ["bash/init"]
+zsh  = ["zsh/shell", "zsh/rc", "zsh/init"]
+
+[bootstrap.roles]
+laptop = ["laptop/ssh", "laptop/server"]
+server = []
+vm     = []
+devops = ["devops/k8s", "devops/terraform"]
 
 [servers]
 # Public servers (safe to commit). Private IPs and hostnames should be supplied

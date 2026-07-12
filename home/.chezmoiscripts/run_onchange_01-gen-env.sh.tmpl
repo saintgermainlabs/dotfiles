@@ -1,0 +1,29 @@
+#!/bin/bash
+# Generate ~/.dotfiles/dot_env/.env from encrypted secrets.
+# Re-runs when the encrypted secrets file changes.
+# hash of encrypted secrets to force rerun: {{ include (joinPath .chezmoi.sourceDir ".." "secrets" "secrets.toml.age") | sha256sum }}
+set -euo pipefail
+
+AGE_KEY="${HOME}/.config/age/key.txt"
+SECRETS_AGE="{{ joinPath .chezmoi.sourceDir ".." "secrets" "secrets.toml.age" }}"
+ENV_FILE="${HOME}/.dotfiles/dot_env/.env"
+TMP_ENV="$(mktemp)"
+
+trap 'rm -f "$TMP_ENV"' EXIT
+
+age --decrypt --identity "$AGE_KEY" "$SECRETS_AGE" \
+  | python3 -c "
+import sys, tomllib
+data = tomllib.load(sys.stdin.buffer)
+for k, v in data.items():
+    print(f'export {k}=\"{v}\"')
+" > "$TMP_ENV"
+
+# Only overwrite if content changed (avoid unnecessary mtime bumps)
+if ! cmp -s "$TMP_ENV" "$ENV_FILE" 2>/dev/null; then
+  mkdir -p "$(dirname "$ENV_FILE")"
+  mv "$TMP_ENV" "$ENV_FILE"
+  echo "Wrote $ENV_FILE"
+else
+  echo "$ENV_FILE unchanged"
+fi

@@ -1,0 +1,32 @@
+#!/bin/bash
+# Set up age encryption key from 1Password if not already configured.
+set -euo pipefail
+
+AGE_DIR="${HOME}/.config/age"
+AGE_KEY="${AGE_DIR}/key.txt"
+
+if [ -f "${AGE_KEY}" ]; then
+  echo "age identity already exists at ${AGE_KEY}"
+  exit 0
+fi
+
+if ! command -v op &>/dev/null; then
+  echo "1Password CLI (op) not found; cannot retrieve age key." >&2
+  exit 1
+fi
+
+if ! op whoami &>/dev/null; then
+  echo "Signing in to 1Password..."
+  op signin 2>&1 || {
+    echo "Failed to sign in to 1Password. Try 'op signin' manually." >&2
+    exit 1
+  }
+fi
+
+mkdir -p "${AGE_DIR}"
+
+echo "Retrieving age key from 1Password..."
+op read "op://Security Keys/chezmoi age key/key.txt" > "${AGE_KEY}"
+chmod 600 "${AGE_KEY}"
+
+echo "age identity installed at ${AGE_KEY}"

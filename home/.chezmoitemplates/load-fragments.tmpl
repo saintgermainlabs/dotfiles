@@ -1,4 +1,6 @@
-{{- range $name, $contexts := .fragments -}}
+{{- /* Use merged fragments from .data.fragments (includes module fragments), fall back to .fragments */ -}}
+{{- $frags := .data.fragments | default .fragments -}}
+{{- range $name, $contexts := $frags -}}
 {{-   $enabled := false -}}
 {{-   range $contexts -}}
 {{-     if or (eq . $.role) (and (eq . "gui") $.gui) -}}

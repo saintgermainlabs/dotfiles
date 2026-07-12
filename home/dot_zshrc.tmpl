@@ -2,27 +2,8 @@
 
 DF_DIR="${HOME}/.dotfiles"
 
-# Load common shell-agnostic helpers (shared across all roles and shells).
-[ -r "${DF_DIR}/common/aliases" ] && . "${DF_DIR}/common/aliases"
-[ -r "${DF_DIR}/common/functions" ] && . "${DF_DIR}/common/functions"
-[ -r "${DF_DIR}/common/prompt" ] && . "${DF_DIR}/common/prompt"
-
-# Load zsh-specific helpers.
-[ -r "${DF_DIR}/zsh/shell" ] && . "${DF_DIR}/zsh/shell"
-[ -r "${DF_DIR}/zsh/rc" ] && . "${DF_DIR}/zsh/rc"
-[ -r "${DF_DIR}/zsh/init" ] && . "${DF_DIR}/zsh/init"
-
-# Load role-specific helpers.
-{{- if eq .role "laptop" }}
-[ -r "${DF_DIR}/laptop/bash/ssh" ] && . "${DF_DIR}/laptop/bash/ssh"
-[ -r "${DF_DIR}/laptop/bash/server" ] && . "${DF_DIR}/laptop/bash/server"
-{{- end }}
-{{- if eq .role "server" }}
-# Server-specific helpers
-{{- end }}
-{{- if eq .role "vm" }}
-# VM-specific helpers
-{{- end }}
+# Load shell modules from bootstrap data.
+{{ template "source-bootstrap.tmpl" dict "bootstrap" .bootstrap "role" .role "shell" "zsh" }}
 
 # Load optional fragments based on configuration.
 {{ template "load-fragments.tmpl" . }}

@@ -1,0 +1,7 @@
+{{- /* setup-path.tmpl: Output PATH export from paths data.
+  Context must contain:
+    .paths (list of path strings)
+  Usage:
+    {{ template "setup-path.tmpl" dict "paths" .paths }}
+*/ -}}
+export PATH="{{- range $i, $p := .paths }}{{ if $i }}:{{ end }}{{ $p }}{{ end }}:$PATH"

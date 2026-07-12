@@ -1,0 +1,194 @@
+# Rename media files by EXIF date (requires exiftool)
+# Usage: rename_by_date <files...>
+rename_by_date() {
+  if ! command -v exiftool &>/dev/null; then
+    echo "exiftool: command not found (install with: sudo apt install libimage-exiftool-perl)" >&2
+    return 1
+  fi
+
+  if [ $# -eq 0 ]; then
+    echo "Usage: rename_by_date <files...>" >&2
+    return 1
+  fi
+
+  exiftool '-FileName<CreateDate' -d '%Y-%m-%d_%H%M%S%%-c.%%le' "$@"
+}
+
+# Rename media files by EXIF date with a custom prefix
+# Usage: rename_by_date_prefix <prefix> <files...>
+rename_by_date_prefix() {
+  if ! command -v exiftool &>/dev/null; then
+    echo "exiftool: command not found (install with: sudo apt install libimage-exiftool-perl)" >&2
+    return 1
+  fi
+
+  if [ $# -lt 2 ]; then
+    echo "Usage: rename_by_date_prefix <prefix> <files...>" >&2
+    return 1
+  fi
+
+  local prefix="$1"
+  shift
+
+  exiftool "-FileName<${prefix}_\${CreateDate}" -d '%Y-%m-%d_%H%M%S%%-c.%%le' "$@"
+}
+
+# Rename media files by camera model and date (requires exiftool)
+# Usage: rename_by_camera <files...>
+rename_by_camera() {
+  if ! command -v exiftool &>/dev/null; then
+    echo "exiftool: command not found (install with: sudo apt install libimage-exiftool-perl)" >&2
+    return 1
+  fi
+
+  if [ $# -eq 0 ]; then
+    echo "Usage: rename_by_camera <files...>" >&2
+    return 1
+  fi
+
+  exiftool '-FileName<${Model; s/[ /]+/_/g}_${CreateDate}' -d '%Y-%m-%d_%H%M%S%%-c.%%le' "$@"
+}
+
+# Show metadata for media files (requires exiftool)
+# Usage: media_info <files...>
+media_info() {
+  if ! command -v exiftool &>/dev/null; then
+    echo "exiftool: command not found (install with: sudo apt install libimage-exiftool-perl)" >&2
+    return 1
+  fi
+
+  if [ $# -eq 0 ]; then
+    echo "Usage: media_info <files...>" >&2
+    return 1
+  fi
+
+  exiftool -Createdate -Model -ImageSize -FileSize -Duration -FileType "$@" | grep -v '^$'
+}
+
+# Strip all EXIF metadata from media files (creates backups with _original)
+# Usage: strip_metadata <files...>
+strip_metadata() {
+  if ! command -v exiftool &>/dev/null; then
+    echo "exiftool: command not found (install with: sudo apt install libimage-exiftool-perl)" >&2
+    return 1
+  fi
+
+  if [ $# -eq 0 ]; then
+    echo "Usage: strip_metadata <files...>" >&2
+    return 1
+  fi
+
+  exiftool -all= "$@"
+}
+
+# Add a keyword/tag to media files (requires exiftool)
+# Usage: add_tag <tag> <files...>
+add_tag() {
+  if ! command -v exiftool &>/dev/null; then
+    echo "exiftool: command not found (install with: sudo apt install libimage-exiftool-perl)" >&2
+    return 1
+  fi
+
+  if [ $# -lt 2 ]; then
+    echo "Usage: add_tag <tag> <files...>" >&2
+    return 1
+  fi
+
+  local tag="$1"
+  shift
+
+  exiftool -Keywords+="$tag" "$@"
+}
+
+# Add a comment to media files (requires exiftool)
+# Usage: add_comment <comment> <files...>
+add_comment() {
+  if ! command -v exiftool &>/dev/null; then
+    echo "exiftool: command not found (install with: sudo apt install libimage-exiftool-perl)" >&2
+    return 1
+  fi
+
+  if [ $# -lt 2 ]; then
+    echo "Usage: add_comment <comment> <files...>" >&2
+    return 1
+  fi
+
+  local comment="$1"
+  shift
+
+  exiftool -Description="$comment" -Comment="$comment" "$@"
+}
+
+# Copy EXIF date from one file to another (requires exiftool)
+# Usage: copy_date <source_file> <target_file>
+copy_date() {
+  if ! command -v exiftool &>/dev/null; then
+    echo "exiftool: command not found (install with: sudo apt install libimage-exiftool-perl)" >&2
+    return 1
+  fi
+
+  if [ $# -ne 2 ]; then
+    echo "Usage: copy_date <source_file> <target_file>" >&2
+    return 1
+  fi
+
+  exiftool -TagsFromFile "$1" -AllDates "$2"
+}
+
+# Batch rename with a numbered pattern
+# Usage: batch_rename <pattern> <files...>
+# Example: batch_rename "vacation_%03d" *.jpg -> vacation_001.jpg, vacation_002.jpg...
+batch_rename() {
+  if [ $# -lt 2 ]; then
+    echo "Usage: batch_rename <pattern> <files...>" >&2
+    echo "Example: batch_rename \"vacation_%%03d\" *.jpg" >&2
+    return 1
+  fi
+
+  local pattern="$1"
+  shift
+
+  local ext name counter=1
+  for file in "$@"; do
+    if [ -f "$file" ]; then
+      ext="${file##*.}"
+      name=$(printf "$pattern" "$counter")
+      if [ -n "$ext" ] && [ "$ext" != "$file" ]; then
+        name="${name}.${ext}"
+      fi
+      if [ ! -e "$name" ]; then
+        mv -n "$file" "$name"
+      else
+        echo "Skipping: $name already exists" >&2
+      fi
+      ((counter++))
+    fi
+  done
+}
+
+# Convert HEIC/HEIF images to JPEG (requires libheif-examples)
+# Usage: heic2jpg <files...>
+heic2jpg() {
+  if ! command -v heif-convert &>/dev/null; then
+    echo "heif-convert: command not found (install with: sudo apt install libheif-examples)" >&2
+    return 1
+  fi
+
+  if [ $# -eq 0 ]; then
+    echo "Usage: heic2jpg <files...>" >&2
+    return 1
+  fi
+
+  local input output
+  for input in "$@"; do
+    case "${input,,}" in
+      *.heic|*.heif)
+        output="${input%.*}.jpg"
+        heif-convert "$input" "$output" && echo "Converted: $input -> $output"
+        ;;
+      *)
+        echo "Skipping (not HEIC/HEIF): $input" >&2
+        ;;
+    esac
+  done
+}

@@ -1,0 +1,31 @@
+# Modules — higher-level groupings of tools, packages, and shell fragments.
+# Each module specifies:
+#   - tools:  mise-managed tools (see roles.toml [tools.*])
+#   - packages: apt packages (see roles.toml [packages.*])
+#   - fragments: shell fragment files in dot_dotfiles/fragments/
+#   - contexts: which roles (& gui) activate this module
+#   - scripts: run-once scripts to install non-mise/non-apt software (optional)
+#
+# A module is active when the host's role matches one of its contexts
+# (or "gui" is in contexts and the host has gui = true).
+
+[modules."remote-coolify-manager"]
+name = "remote-coolify-manager"
+description = "CLI tools and shell helpers for remotely managing Coolify servers via the Coolify API and Tailscale mesh"
+contexts = ["server", "laptop", "devops"]
+# mise-managed tools needed by this module
+tools = ["go"]
+# apt packages needed by this module
+packages = ["tailscale"]
+# shell fragment files to load
+fragments = ["remote-coolify-manage"]
+# custom install scripts (relative to .chezmoiscripts/)
+scripts = ["run_once_after_20-install-coolify-cli.sh.tmpl"]
+
+# Add more modules below as needed
+# [modules."k8s-admin"]
+# name = "k8s-admin"
+# contexts = ["server", "laptop"]
+# tools = ["kubectl", "helm", "k9s"]
+# packages = []
+# fragments = ["k8s_functions"]

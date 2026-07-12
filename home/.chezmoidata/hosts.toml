@@ -12,3 +12,8 @@ tags = ["homelab", "coolify-host"]
 role = "vm"
 gui  = false
 tags = ["ephemeral"]
+
+[hosts."devops-dev01"]
+role = "devops"
+gui  = false
+tags = ["dev", "container"]

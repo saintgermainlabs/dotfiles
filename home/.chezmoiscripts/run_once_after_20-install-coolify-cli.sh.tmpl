@@ -1,0 +1,82 @@
+#!/bin/bash
+# Install the Coolify CLI binary.
+# Only runs when the remote-coolify-manager module is active.
+# Downloads and builds the CLI from source, or downloads a prebuilt binary.
+set -euo pipefail
+
+COOLIFY_BIN="${HOME}/.local/bin/coolify"
+COOLIFY_SOURCE="${HOME}/src/coolify-cli"
+
+build_from_source() {
+  echo "Building coolify CLI from source..."
+  mkdir -p "$(dirname "$COOLIFY_SOURCE")"
+
+  if [ -d "$COOLIFY_SOURCE" ]; then
+    cd "$COOLIFY_SOURCE"
+    git pull --ff-only origin main 2>/dev/null || true
+  else
+    git clone --depth 1 https://github.com/saintgermainlabs/coolify-cli.git "$COOLIFY_SOURCE"
+    cd "$COOLIFY_SOURCE"
+  fi
+
+  if [ -f "coolify/main.go" ]; then
+    cd coolify
+    go build -o "$COOLIFY_BIN" .
+  elif [ -f "main.go" ]; then
+    go build -o "$COOLIFY_BIN" .
+  elif [ -f "go.mod" ]; then
+    go build -o "$COOLIFY_BIN" .
+  else
+    echo "coolify CLI source not found at expected paths; skipping build." >&2
+    return 1
+  fi
+
+  echo "coolify CLI installed to $COOLIFY_BIN"
+}
+
+download_binary() {
+  local version="${1:-latest}"
+  local arch url
+
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64)  arch="amd64" ;;
+    aarch64) arch="arm64"  ;;
+    *)       echo "Unsupported architecture: $arch" >&2; return 1 ;;
+  esac
+
+  url="https://github.com/saintgermainlabs/coolify-cli/releases/${version}/download/coolify-linux-${arch}"
+  echo "Downloading coolify CLI from $url ..."
+  curl -fsSL -o "$COOLIFY_BIN" "$url"
+  chmod +x "$COOLIFY_BIN"
+  echo "coolify CLI installed to $COOLIFY_BIN"
+}
+
+main() {
+  # Skip if already installed and working
+  if command -v coolify &>/dev/null; then
+    local current_ver
+    current_ver=$(coolify version 2>/dev/null | head -1 || echo "")
+    echo "coolify CLI already installed (version: ${current_ver:-unknown})"
+    # Re-install nightly builds, skip pinned versions
+    if echo "${current_ver}" | grep -qi "nightly\|dev\|unknown"; then
+      echo "Nightly/dev build detected — re-installing..."
+    else
+      return 0
+    fi
+  fi
+
+  mkdir -p "$(dirname "$COOLIFY_BIN")"
+
+  # Try binary download first, fall back to source build
+  if download_binary "latest"; then
+    :
+  else
+    echo "Binary download failed; attempting source build..." >&2
+    build_from_source
+  fi
+
+  echo "coolify CLI setup complete."
+}
+
+main

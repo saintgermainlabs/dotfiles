@@ -1,0 +1,62 @@
+# List all machines in the tailnet with their MagicDNS names
+tailscale_domains() {
+  if ! command -v tailscale &>/dev/null; then
+    echo "tailscale: command not found" >&2
+    return 1
+  fi
+  tailscale status --json 2>/dev/null | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+peers = data.get('Peer', {})
+machines = []
+if 'Self' in data:
+    dns = data['Self'].get('DNSName', '')
+    if dns:
+        machines.append(dns.rstrip('.'))
+for peer in peers.values():
+    dns = peer.get('DNSName', '')
+    if dns:
+        machines.append(dns.rstrip('.'))
+for m in sorted(machines):
+    print(m)
+" 2>/dev/null || echo "Failed to query tailscale status" >&2
+}
+
+# Find the server directory path for a Coolify resource (app/service/database)
+# Usage: coolify_app_path <resource-uuid>
+coolify_app_path() {
+  if ! command -v coolify &>/dev/null; then
+    echo "coolify: command not found" >&2
+    return 1
+  fi
+  local uuid="$1"
+  [ -z "$uuid" ] && { echo "Usage: coolify_app_path <resource-uuid>" >&2; return 1; }
+
+  local info
+  info=$(coolify resource list --format json 2>/dev/null | python3 -c "
+import json, sys
+for r in json.load(sys.stdin):
+    if r['uuid'] == sys.argv[1]:
+        print(f\"{r['type']}|{r['uuid']}|{r['name']}\")
+        break
+" "$uuid" 2>/dev/null)
+
+  [ -z "$info" ] && { echo "No resource found with UUID $uuid" >&2; return 1; }
+
+  local type="${info%%|*}"
+  local rest="${info#*|}"
+  local res_uuid="${rest%%|*}"
+  local name="${rest#*|}"
+
+  case "$type" in
+    application)
+      echo "/data/coolify/applications/${res_uuid}/"
+      ;;
+    standalone-postgresql|standalone-redis)
+      echo "/data/coolify/databases/${res_uuid}/"
+      ;;
+    *)
+      echo "/data/coolify/${type}s/${res_uuid}/"
+      ;;
+  esac
+}

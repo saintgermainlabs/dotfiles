@@ -6,14 +6,14 @@ DF_DIR="${HOME}/.dotfiles"
 [ -f "${DF_DIR}/zsh/shell" ] && source "${DF_DIR}/zsh/shell"
 
 # User-facing commands. Bash-compatible aliases and functions work in zsh too.
-source "${DF_DIR}/bash/aliases"
-source "${DF_DIR}/bash/functions"
-source "${DF_DIR}/bash/ssh"
-source "${DF_DIR}/bash/server"
+[ -f "${DF_DIR}/common/aliases" ] && source "${DF_DIR}/common/aliases"
+[ -f "${DF_DIR}/common/functions" ] && source "${DF_DIR}/common/functions"
+[ -f "${DF_DIR}/laptop/bash/ssh" ] && source "${DF_DIR}/laptop/bash/ssh"
+[ -f "${DF_DIR}/laptop/bash/server" ] && source "${DF_DIR}/laptop/bash/server"
 
 # UI and optional tool initialization.
-source "${DF_DIR}/bash/prompt"
-source "${DF_DIR}/zsh/init"
+[ -f "${DF_DIR}/common/prompt" ] && source "${DF_DIR}/common/prompt"
+[ -f "${DF_DIR}/zsh/init" ] && source "${DF_DIR}/zsh/init"
 
 # Zsh-specific completions
 autoload -Uz compinit

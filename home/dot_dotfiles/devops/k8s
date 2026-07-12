@@ -1,0 +1,97 @@
+# Kubernetes helpers — loaded for the devops role.
+# Requires: kubectl, helm, k9s (installed via mise).
+
+# ── Context helpers ──────────────────────────────────────────────────
+
+# List all configured Kubernetes contexts
+k8s_contexts() {
+  if ! command -v kubectl &>/dev/null; then
+    echo "kubectl: command not found" >&2
+    return 1
+  fi
+  kubectl config get-contexts -o name 2>/dev/null
+}
+
+# Switch to a Kubernetes context by partial name
+# Usage: k8s_use <context-name>
+k8s_use() {
+  local ctx="$1"
+  [ -z "$ctx" ] && { echo "Usage: k8s_use <context-name>" >&2; return 1; }
+  kubectl config use-context "$ctx"
+}
+
+# Show the current Kubernetes context
+k8s_current() {
+  if ! command -v kubectl &>/dev/null; then
+    echo "kubectl: command not found" >&2
+    return 1
+  fi
+  kubectl config current-context 2>/dev/null
+}
+
+# ── Pod helpers ──────────────────────────────────────────────────────
+
+# List pods across all namespaces
+k8s_pods() {
+  if ! command -v kubectl &>/dev/null; then
+    echo "kubectl: command not found" >&2
+    return 1
+  fi
+  kubectl get pods --all-namespaces -o wide "$@"
+}
+
+# Shell into a pod (auto-detects sh/bash)
+# Usage: k8s_shell <pod-name> [namespace]
+k8s_shell() {
+  local pod="$1"
+  local ns="${2:-default}"
+  [ -z "$pod" ] && { echo "Usage: k8s_shell <pod-name> [namespace]" >&2; return 1; }
+  kubectl -n "$ns" exec -it "$pod" -- sh 2>/dev/null || \
+    kubectl -n "$ns" exec -it "$pod" -- bash
+}
+
+# Tail logs from a pod
+# Usage: k8s_logs <pod-name> [namespace] [tail-lines]
+k8s_logs() {
+  local pod="$1"
+  local ns="${2:-default}"
+  local tail="${3:-100}"
+  [ -z "$pod" ] && { echo "Usage: k8s_logs <pod-name> [namespace] [tail-lines]" >&2; return 1; }
+  kubectl -n "$ns" logs --tail="$tail" -f "$pod"
+}
+
+# ── Namespace helpers ────────────────────────────────────────────────
+
+# List all namespaces
+k8s_ns() {
+  if ! command -v kubectl &>/dev/null; then
+    echo "kubectl: command not found" >&2
+    return 1
+  fi
+  kubectl get namespaces "$@"
+}
+
+# ── Helm helpers ─────────────────────────────────────────────────────
+
+# List all Helm releases across all namespaces
+k8s_helm() {
+  if ! command -v helm &>/dev/null; then
+    echo "helm: command not found" >&2
+    return 1
+  fi
+  helm list --all-namespaces "$@"
+}
+
+# ── Quick diagnostics ────────────────────────────────────────────────
+
+# Show cluster info, nodes, and top pods
+k8s_diag() {
+  echo "=== Cluster Info ==="
+  kubectl cluster-info 2>/dev/null || echo "kubectl: not connected" >&2
+  echo
+  echo "=== Nodes ==="
+  kubectl get nodes -o wide 2>/dev/null
+  echo
+  echo "=== Top Pods ==="
+  kubectl top pods --all-namespaces 2>/dev/null || echo "metrics-server: not available" >&2
+}

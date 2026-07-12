@@ -1,0 +1,232 @@
+# Remote Coolify management helpers
+# Requires: coolify CLI, tailscale, and a configured coolify context.
+
+# ── Coolify context helpers ──────────────────────────────────────────
+
+# List available Coolify contexts (configured instances)
+coolify_contexts() {
+  if ! command -v coolify &>/dev/null; then
+    echo "coolify: command not found" >&2
+    return 1
+  fi
+  coolify context list 2>/dev/null || echo "No contexts configured" >&2
+}
+
+# Quick-select a Coolify context by partial name
+coolify_use() {
+  local name="$1"
+  [ -z "$name" ] && { echo "Usage: coolify_use <context_name>" >&2; return 1; }
+  coolify context set-default "$name" 2>/dev/null
+}
+
+# ── Server discovery (via Tailscale) ─────────────────────────────────
+
+# List Tailscale machines tagged for Coolify (via tailscale tags)
+coolify_hosts() {
+  if ! command -v tailscale &>/dev/null; then
+    echo "tailscale: command not found" >&2
+    return 1
+  fi
+  tailscale status --json 2>/dev/null | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+peers = data.get('Peer', {})
+results = []
+if 'Self' in data:
+    s = data['Self']
+    tags = s.get('Tags', [])
+    if any('coolify' in t.lower() for t in tags):
+        results.append((s.get('DNSName', '').rstrip('.'), s.get('TailscaleIPs', [''])[0], 'self'))
+for pid, peer in peers.items():
+    tags = peer.get('Tags', [])
+    if any('coolify' in t.lower() for t in tags):
+        results.append((peer.get('DNSName', '').rstrip('.'), peer.get('TailscaleIPs', [''])[0], 'peer'))
+for name, ip, kind in sorted(results):
+    print(f'{name:40s} {ip:15s} ({kind})')
+" 2>/dev/null || tailscale status | grep -i coolify
+}
+
+# ── Coolify API queries ──────────────────────────────────────────────
+
+# List all servers registered in Coolify
+coolify_servers() {
+  if ! command -v coolify &>/dev/null; then
+    echo "coolify: command not found" >&2
+    return 1
+  fi
+  coolify servers list "$@"
+}
+
+# List all projects with their environments
+coolify_projects() {
+  if ! command -v coolify &>/dev/null; then
+    echo "coolify: command not found" >&2
+    return 1
+  fi
+  coolify projects list "$@"
+}
+
+# List all resources (applications, services) across all projects
+coolify_resources() {
+  if ! command -v coolify &>/dev/null; then
+    echo "coolify: command not found" >&2
+    return 1
+  fi
+  coolify resources list "$@"
+}
+
+# Deploy a resource by UUID or partial name
+coolify_deploy() {
+  if ! command -v coolify &>/dev/null; then
+    echo "coolify: command not found" >&2
+    return 1
+  fi
+  local ref="$1"
+  [ -z "$ref" ] && { echo "Usage: coolify_deploy <resource_uuid>" >&2; return 1; }
+  coolify deploy uuid "$ref"
+}
+
+# ── SSH shortcut via Tailscale ───────────────────────────────────────
+
+# SSH into a Coolify host using its Tailscale MagicDNS name
+# Usage: coolify_ssh <hostname> [user]
+coolify_ssh() {
+  local host="$1"
+  local user="${2:-root}"
+  [ -z "$host" ] && { echo "Usage: coolify_ssh <hostname> [user]" >&2; return 1; }
+  # Resolve via tailscale if not a FQDN
+  if ! [[ "$host" == *.* ]]; then
+    local resolved
+    resolved=$(tailscale status --json 2>/dev/null | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for pid, peer in data.get('Peer', {}).items():
+    name = peer.get('DNSName', '').rstrip('.')
+    tag = name.split('.')[0]
+    if tag == '$host' or name.startswith('$host.'):
+        print(name)
+        break
+" 2>/dev/null)
+    [ -n "$resolved" ] && host="$resolved"
+  fi
+  ssh "${user}@${host}"
+}
+
+# ── Resource search (via API) ────────────────────────────────────────
+
+# Search for resources by Project/resource-name glob pattern.
+# Returns project UUID, env UUID, type, and resource UUID/name.
+# Usage: coolify_search <ProjectName/glob-pattern>
+coolify_search() {
+  local pattern="$1"
+  [ -z "$pattern" ] && { echo "Usage: coolify_search <ProjectName/glob-pattern>" >&2; return 1; }
+
+  local project_part="${pattern%%/*}"
+  local resource_part="${pattern#*/}"
+  [ "$project_part" = "$pattern" ] && { echo "Pattern must include / (e.g. ProjectName/app-name*)" >&2; return 1; }
+
+  local config="$HOME/.config/coolify/config.json"
+  [ ! -f "$config" ] && { echo "Coolify config not found" >&2; return 1; }
+
+  python3 -c "
+import json, os, urllib.request, fnmatch, ssl
+
+CONFIG = os.path.expanduser('$config')
+PROJECT_PAT = '$project_part'
+RESOURCE_PAT = '$resource_part'
+
+with open(CONFIG) as f:
+    cfg = json.load(f)
+
+inst = next((i for i in cfg['instances'] if i.get('default')), None)
+if not inst:
+    exit(1)
+
+fqdn = inst['fqdn'].rstrip('/')
+token = inst['token']
+ssl_ctx = ssl.create_default_context()
+ssl_ctx.check_hostname = False
+ssl_ctx.verify_mode = ssl.CERT_NONE
+
+def api(path):
+    headers = {'Authorization': f'Bearer {token}', 'User-Agent': 'curl/7.88.1'}
+    req = urllib.request.Request(f'{fqdn}/api/v1/{path}', headers=headers)
+    with urllib.request.urlopen(req, context=ssl_ctx) as r:
+        return json.loads(r.read())
+
+projects = api('projects')
+found = 0
+for proj in projects:
+    if not fnmatch.fnmatch(proj['name'], PROJECT_PAT):
+        continue
+    proj_detail = api(f'projects/{proj[\"uuid\"]}')
+    for env in proj_detail.get('environments', []):
+        env_uuid = env['uuid']
+        resources = api(f'projects/{proj[\"uuid\"]}/{env_uuid}')
+        for key in ('applications', 'services', 'postgresqls', 'mysqls', 'mongodbs', 'mariadbs', 'redis'):
+            for r in resources.get(key, []):
+                if fnmatch.fnmatch(r['name'], RESOURCE_PAT):
+                    t = key.rstrip('s')
+                    if t == 'postgresql':
+                        t = 'postgresql'
+                    print(f'project={proj[\"uuid\"]} name={proj[\"name\"]} env={env_uuid} env_name={env[\"name\"]} type={t} uuid={r[\"uuid\"]} resource={r[\"name\"]}')
+                    found += 1
+if not found:
+    exit(1)
+" 2>/dev/null || { echo "No resources matching \"$pattern\"" >&2; return 1; }
+}
+
+# ── Coolify firewall (mesh) helpers ──────────────────────────────────
+# NOTE: `coolify firewall` is not available in CLI v1.6.2.
+# These functions are kept as stubs for when it becomes available.
+
+# List containers on the Coolify mesh (requires coolify init firewall)
+coolify_containers() {
+  echo "coolify firewall: not available in this CLI version" >&2
+  return 1
+}
+
+# Show firewall allow rules on the Coolify mesh
+coolify_firewall_list() {
+  echo "coolify firewall: not available in this CLI version" >&2
+  return 1
+}
+
+# Allow traffic between two containers on the Coolify mesh
+# Usage: coolify_firewall_allow --from <src> --to <dst> [--port N] [--proto tcp|udp] [--bidirectional]
+coolify_firewall_allow() {
+  echo "coolify firewall: not available in this CLI version" >&2
+  return 1
+}
+
+# Revoke a previously allowed rule
+# Usage: coolify_firewall_revoke --from <src> --to <dst> [--port N] [--proto tcp|udp] [--bidirectional]
+coolify_firewall_revoke() {
+  echo "coolify firewall: not available in this CLI version" >&2
+  return 1
+}
+
+# ── Quick diagnostics ────────────────────────────────────────────────
+
+# Show Coolify version and context info
+coolify_diag() {
+  echo "=== Coolify CLI ==="
+  if command -v coolify &>/dev/null; then
+    coolify version 2>/dev/null || echo "coolify: version check failed" >&2
+    echo
+    echo "--- Context ---"
+    coolify context list 2>/dev/null || echo "No contexts configured" >&2
+  else
+    echo "NOT INSTALLED"
+  fi
+  echo
+  echo "=== Tailscale ==="
+  if command -v tailscale &>/dev/null; then
+    tailscale status 2>/dev/null | head -20 || echo "tailscale: not connected" >&2
+  else
+    echo "NOT INSTALLED"
+  fi
+  echo
+  echo "=== Coolify Hosts (via Tailscale tags) ==="
+  coolify_hosts 2>/dev/null || echo "No tagged hosts found" >&2
+}

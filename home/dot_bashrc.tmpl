@@ -8,25 +8,8 @@ esac
 
 DF_DIR="${HOME}/.dotfiles"
 
-# Load common shell-agnostic helpers (shared across all roles and shells).
-[ -r "${DF_DIR}/common/aliases" ] && . "${DF_DIR}/common/aliases"
-[ -r "${DF_DIR}/common/functions" ] && . "${DF_DIR}/common/functions"
-[ -r "${DF_DIR}/common/prompt" ] && . "${DF_DIR}/common/prompt"
-
-# Load bash-specific helpers.
-[ -r "${DF_DIR}/bash/init" ] && . "${DF_DIR}/bash/init"
-
-# Load role-specific bash helpers.
-{{- if eq .role "laptop" }}
-[ -r "${DF_DIR}/laptop/bash/ssh" ] && . "${DF_DIR}/laptop/bash/ssh"
-[ -r "${DF_DIR}/laptop/bash/server" ] && . "${DF_DIR}/laptop/bash/server"
-{{- end }}
-{{- if eq .role "server" }}
-# Server-specific bash helpers
-{{- end }}
-{{- if eq .role "vm" }}
-# VM-specific bash helpers
-{{- end }}
+# Load shell modules from bootstrap data.
+{{ template "source-bootstrap.tmpl" dict "bootstrap" .bootstrap "role" .role "shell" "bash" }}
 
 # Load optional fragments based on configuration.
 {{ template "load-fragments.tmpl" . }}
@@ -54,5 +37,5 @@ fi
 # Machine-local, untracked overrides.
 [ -r ~/.bashrc.local ] && . ~/.bashrc.local
 
-# Ensure user-local bin is on PATH.
-export PATH="$HOME/.local/bin:$PATH"
+# Build PATH from chezmoi data.
+{{ template "setup-path.tmpl" dict "paths" .paths }}

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install apt packages per role. Idempotent and safe to re-run.
+# Install apt packages per role and active modules. Idempotent and safe to re-run.
 set -euo pipefail
 
 if ! command -v apt-get >/dev/null 2>&1; then
@@ -19,6 +19,10 @@ PACKAGES=(
 {{- range .packages.gui.list }}
   {{ . | quote }}
 {{- end }}
+{{- end }}
+{{- /* Packages from active modules (e.g. remote-coolify-manager -> tailscale) */ -}}
+{{- range .data.module_packages }}
+  {{ . | quote }}
 {{- end }}
 )
 

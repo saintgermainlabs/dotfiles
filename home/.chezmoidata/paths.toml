@@ -1,0 +1,7 @@
+# Custom PATH additions, prepended in order.
+# Paths with $HOME are expanded by the shell at runtime.
+paths = [
+  "$HOME/bin",
+  "$HOME/.local/bin",
+  "$HOME/.opencode/bin",
+]

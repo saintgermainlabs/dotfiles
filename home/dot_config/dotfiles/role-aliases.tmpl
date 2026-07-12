@@ -9,3 +9,15 @@ alias journalf='journalctl -fu'
 alias ports='ss -tulpn'
 alias tailscale-status='tailscale status'
 {{ end }}
+
+{{ if eq .role "devops" }}
+alias dockerlogs='docker logs -f'
+alias dps='docker ps --format "table {{`{{.Names}}`}}\t{{`{{.Status}}`}}\t{{`{{.Ports}}`}}"'
+alias dcom='docker compose'
+alias k='kubectl'
+alias kctx='kubectl config use-context'
+alias kctxs='kubectl config get-contexts'
+alias helm-ls='helm list'
+alias ports='ss -tulpn'
+alias tailscale-status='tailscale status'
+{{ end }}
