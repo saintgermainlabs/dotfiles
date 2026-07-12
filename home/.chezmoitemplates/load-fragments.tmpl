@@ -1,5 +1,5 @@
-{{- /* Use merged fragments from .data.fragments (includes module fragments), fall back to .fragments */ -}}
-{{- $frags := .data.fragments | default .fragments -}}
+{{- /* Use merged fragments from .fragments (includes module fragments) */ -}}
+{{- $frags := .fragments -}}
 {{- range $name, $contexts := $frags -}}
 {{-   $enabled := false -}}
 {{-   range $contexts -}}

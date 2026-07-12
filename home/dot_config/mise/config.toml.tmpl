@@ -3,7 +3,7 @@
 {{- if .gui }}{{ $tools = merge $tools .tools.gui }}{{ end -}}
 {{- /* Ensure tools required by active modules are present. Modules list tool names;
      if they don't appear in the base tool lists, they get a 'latest' default. */ -}}
-{{- $moduleToolKeys := keys .data.module_tools | default list -}}
+{{- $moduleToolKeys := keys .module_tools | default list -}}
 {{- range $t := $moduleToolKeys -}}
 {{-   if not (hasKey $tools $t) -}}
 {{-     $tools = merge $tools (dict $t "latest") -}}

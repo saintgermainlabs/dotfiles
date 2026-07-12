@@ -38,11 +38,19 @@
     github_user = "saintgermainlabs"
     git_name    = "Saint Germain Labs"
     git_email   = "saintgermainlabs@gmail.com"
-    fragments = {{ $mergedFragments | toJson }}
     module_enabled = {{ $enabledModules | toJson }}
-    module_tools   = {{ $_moduleTools | toJson }}
     module_packages = {{ $_modulePackages | toJson }}
     module_scripts  = {{ $_moduleScripts | toJson }}
+
+[data.fragments]
+{{- range $name, $contexts := $mergedFragments }}
+    {{ $name | quote }} = {{ $contexts | toJson }}
+{{- end }}
+
+[data.module_tools]
+{{- range $tool, $val := $_moduleTools }}
+    {{ $tool | quote }} = {{ $val }}
+{{- end }}
 
 encryption = "age"
 

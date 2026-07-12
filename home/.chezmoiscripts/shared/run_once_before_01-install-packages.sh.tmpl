@@ -21,7 +21,7 @@ PACKAGES=(
 {{- end }}
 {{- end }}
 {{- /* Packages from active modules (e.g. remote-coolify-manager -> tailscale) */ -}}
-{{- range .data.module_packages }}
+{{- range .module_packages }}
   {{ . | quote }}
 {{- end }}
 )
