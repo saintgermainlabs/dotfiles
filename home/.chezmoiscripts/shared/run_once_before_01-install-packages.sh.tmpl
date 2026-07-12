@@ -31,10 +31,51 @@ if [ ${#PACKAGES[@]} -eq 0 ]; then
   exit 0
 fi
 
+# Filter out Docker packages if Docker is already available (e.g. devcontainer
+# features like docker-outside-of-docker install Docker CE, which conflicts
+# with Ubuntu's docker.io / docker-compose-v2 packages).
+if command -v docker >/dev/null 2>&1; then
+  filtered=()
+  for pkg in "${PACKAGES[@]}"; do
+    case "$pkg" in
+      docker.io|docker-compose-v2)
+        echo "Docker already installed ($(docker --version 2>/dev/null || echo 'version unknown')); skipping apt package '$pkg'."
+        ;;
+      *)
+        filtered+=("$pkg")
+        ;;
+    esac
+  done
+  PACKAGES=("${filtered[@]}")
+fi
+
+if [ ${#PACKAGES[@]} -eq 0 ]; then
+  echo "All packages already satisfied for role {{ .role }}."
+  exit 0
+fi
+
 echo "Updating apt package lists..."
 sudo apt-get update
 
 echo "Installing packages for role {{ .role }}..."
-sudo apt-get install -y "${PACKAGES[@]}"
+
+# Try installing all packages at once first (fast path). If any package fails
+# (e.g. docker-compose-v2 conflicts with a devcontainer feature that already
+# provides Docker), fall back to installing them individually so one failing
+# package doesn't abort the entire setup.
+if ! sudo apt-get install -y "${PACKAGES[@]}" 2>&1; then
+  echo "Bulk install failed; trying packages individually..." >&2
+  failed_packages=()
+  for pkg in "${PACKAGES[@]}"; do
+    if ! sudo apt-get install -y "${pkg}" 2>&1; then
+      echo "WARNING: Failed to install '${pkg}' — skipping." >&2
+      failed_packages+=("${pkg}")
+    fi
+  done
+  if [ ${#failed_packages[@]} -gt 0 ]; then
+    echo "The following packages failed to install (may already be present or conflicting):"
+    printf '  - %s\n' "${failed_packages[@]}"
+  fi
+fi
 
 echo "Package installation complete."
