@@ -60,7 +60,7 @@ Host metadata lives in `home/.chezmoidata/hosts.toml` and is read by
 3. Keep host-specific configuration minimal.
 4. All changes must be safe to re-apply.
 5. Production configuration must be conservative and security-focused.
-6. Every new feature should work on at least `laptop`, `server`, and `devops`.
+6. Every new feature should work on at least `laptop` and `server`.
 7. Never conflate `role` with `gui`.
 
 ## Secrets policy
@@ -68,6 +68,24 @@ Host metadata lives in `home/.chezmoidata/hosts.toml` and is read by
 Never commit passwords, private SSH keys, API keys, tokens, or certificates.
 Use chezmoi's native secret support (`age`, `gpg`) or external secret managers.
 Private SSH keys should be ignored or managed externally.
+
+### 1Password CLI authentication
+
+The age encryption key is retrieved from 1Password by
+`home/.chezmoiscripts/run_once_before_02-setup-age-key.sh.tmpl`.
+Three authentication methods are supported (tried in order):
+
+1. **App Integration** (laptops/desktops) — the 1Password desktop app bridges
+   to the CLI biometrically. No env vars needed. Enable in 1Password desktop
+   app → Settings → Developer → "Integrate with 1Password CLI".
+2. **Service Account** (dev containers / CI / headless) — set
+   `OP_SERVICE_ACCOUNT_TOKEN` in `~/.dotfiles/dot_env/.env` (gitignored).
+   Create a token at https://developer.1password.com/docs/service-accounts/.
+3. **Interactive signin** — falls back to `op signin` for first-time desktop setup.
+
+For dev containers, mount the 1Password socket from the host or use a Service
+Account token. The token must have access to the vault containing the age key
+item (`op://Security Keys/chezmoi age key/key.txt`).
 
 ## Shell configuration
 
@@ -99,9 +117,6 @@ and merged in `home/dot_config/mise/config.toml.tmpl`.
 - **DevOps** is a dev container role with all common fragments, Docker, Kubernetes
   (kubectl, helm, k9s), Terraform, and Coolify management tools. Designed for
   containerized CI/CD and infrastructure-as-code workflows.
-
-## SSH standards
-
 SSH configuration is templated. Public servers may be listed in
 `home/.chezmoidata/roles.toml`. Private servers must be supplied via local
 chezmoi data or environment variables. Never deploy laptop-only SSH aliases

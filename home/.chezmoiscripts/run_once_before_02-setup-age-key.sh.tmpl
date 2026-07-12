@@ -1,32 +1,80 @@
 #!/bin/bash
 # Set up age encryption key from 1Password if not already configured.
+#
+# Supports three authentication methods (tried in order):
+#   1. App Integration  — 1Password desktop app bridges to CLI biometrically.
+#      No env vars needed. Works on laptops/desktops with the 1Password app.
+#   2. Service Account  — Uses OP_SERVICE_ACCOUNT_TOKEN env var for non-interactive
+#      auth. Ideal for dev containers, CI, and headless servers.
+#   3. Interactive signin — Falls back to `op signin` for first-time desktop setup.
+#
+# For dev containers, set OP_SERVICE_ACCOUNT_TOKEN in ~/.dotfiles/dot_env/.env
+# (gitignored) or as an environment variable before running chezmoi apply.
 set -euo pipefail
 
 AGE_DIR="${HOME}/.config/age"
 AGE_KEY="${AGE_DIR}/key.txt"
+OP_ITEM_REF="op://Security Keys/chezmoi age key/key.txt"
 
+# ── Skip if key already exists ────────────────────────────────────────
 if [ -f "${AGE_KEY}" ]; then
   echo "age identity already exists at ${AGE_KEY}"
   exit 0
 fi
 
+# ── Check for 1Password CLI ───────────────────────────────────────────
 if ! command -v op &>/dev/null; then
   echo "1Password CLI (op) not found; cannot retrieve age key." >&2
+  echo "Install it: https://developer.1password.com/docs/cli/get-started/" >&2
   exit 1
 fi
 
-if ! op whoami &>/dev/null; then
-  echo "Signing in to 1Password..."
-  op signin 2>&1 || {
-    echo "Failed to sign in to 1Password. Try 'op signin' manually." >&2
-    exit 1
-  }
+# ── Authenticate via one of three methods ─────────────────────────────
+
+op_authenticated=false
+
+# Method 1: App Integration (biometric — desktop app handles auth)
+if op whoami &>/dev/null; then
+  echo "1Password: authenticated via app integration (biometric)."
+  op_authenticated=true
 fi
 
+# Method 2: Service Account (non-interactive — env var based)
+if [ "$op_authenticated" = false ] && [ -n "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]; then
+  echo "1Password: using service account token (OP_SERVICE_ACCOUNT_TOKEN)."
+  # op automatically uses OP_SERVICE_ACCOUNT_TOKEN when set — no signin needed.
+  # Verify the token works by checking whoami.
+  if op whoami &>/dev/null; then
+    echo "1Password: service account authenticated."
+    op_authenticated=true
+  else
+    echo "1Password: service account token is set but invalid or expired." >&2
+  fi
+fi
+
+# Method 3: Interactive signin (first-time desktop setup)
+if [ "$op_authenticated" = false ]; then
+  echo "1Password: attempting interactive signin..."
+  echo "  (If this is a dev container, set OP_SERVICE_ACCOUNT_TOKEN in your .env file)"
+  op signin 2>&1 || {
+    echo "Failed to sign in to 1Password." >&2
+    echo "" >&2
+    echo "Options:" >&2
+    echo "  1. App Integration: Open 1Password desktop app → Settings → Developer →" >&2
+    echo "     Enable 'Integrate with 1Password CLI', then re-run." >&2
+    echo "  2. Service Account: Set OP_SERVICE_ACCOUNT_TOKEN env var." >&2
+    echo "     Create one at: https://developer.1password.com/docs/service-accounts/" >&2
+    echo "  3. Interactive: Run 'op signin' manually, then re-run." >&2
+    exit 1
+  }
+  op_authenticated=true
+fi
+
+# ── Retrieve the age key ──────────────────────────────────────────────
 mkdir -p "${AGE_DIR}"
 
 echo "Retrieving age key from 1Password..."
-op read "op://Security Keys/chezmoi age key/key.txt" > "${AGE_KEY}"
+op read "${OP_ITEM_REF}" > "${AGE_KEY}"
 chmod 600 "${AGE_KEY}"
 
 echo "age identity installed at ${AGE_KEY}"
