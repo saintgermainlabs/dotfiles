@@ -109,6 +109,12 @@ common = [
 bash = ["bash/init"]
 zsh  = ["zsh/shell", "zsh/rc", "zsh/init"]
 
+# Late shell integrations — sourced at the very end of .bashrc / .zshrc.
+# Tools that must be initialized last (e.g. zoxide) go here.
+[bootstrap.late_shells]
+bash = ["bash/late-init"]
+zsh  = ["zsh/late-init"]
+
 [bootstrap.roles]
 laptop = ["laptop/ssh", "laptop/server"]
 server = []

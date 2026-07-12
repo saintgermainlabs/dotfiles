@@ -1,0 +1,12 @@
+{{- /* source-late-init.tmpl: Emit shell source commands for late init files.
+  These are sourced at the very end of .bashrc / .zshrc, after everything else.
+  Tools that must be initialized last (e.g. zoxide) go here.
+  Context must contain:
+    .bootstrap (dict from roles.toml [bootstrap])
+    .shell     ("bash" or "zsh")
+  Usage:
+    {{ template "source-late-init.tmpl" dict "bootstrap" .bootstrap "shell" "bash" }}
+*/ -}}
+{{- range index .bootstrap.late_shells .shell }}
+[ -r "${DF_DIR}/{{ . }}" ] && . "${DF_DIR}/{{ . }}"
+{{- end -}}

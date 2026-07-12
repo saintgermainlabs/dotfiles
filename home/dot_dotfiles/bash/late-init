@@ -1,0 +1,9 @@
+# Late shell integrations — sourced at the very end of .bashrc / .zshrc.
+# Tools that must be initialized last (e.g. zoxide, which wraps `cd`) go here.
+
+# zoxide replaces `cd` with frecency-based directory jumping.
+# Must be at the end of the shell config so nothing sourced after it
+# overrides its cd wrapper.
+if command -v zoxide &> /dev/null; then
+  eval "$(zoxide init bash --cmd cd)"
+fi

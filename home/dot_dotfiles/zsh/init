@@ -6,11 +6,6 @@ if command -v mise &> /dev/null; then
   eval "$(mise activate zsh)"
 fi
 
-# zoxide replaces `cd` with frecency-based directory jumping.
-if command -v zoxide &> /dev/null; then
-  eval "$(zoxide init zsh --cmd cd)"
-fi
-
 # starship owns the prompt when installed; bash/prompt remains the fallback.
 if command -v starship &> /dev/null; then
   eval "$(starship init zsh)"

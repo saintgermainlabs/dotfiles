@@ -19,3 +19,8 @@ DF_DIR="${HOME}/.dotfiles"
 
 # Build PATH from chezmoi data.
 {{ template "setup-path.tmpl" dict "paths" .paths }}
+
+# Late shell integrations — must be at the very end.
+# Tools like zoxide that wrap `cd` need to be initialized last so nothing
+# sourced after them overrides their modifications.
+{{ template "source-late-init.tmpl" dict "bootstrap" .bootstrap "shell" "zsh" }}
