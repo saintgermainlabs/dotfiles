@@ -17,5 +17,5 @@ DF_DIR="${HOME}/.dotfiles"
 # Machine-local, untracked overrides.
 [ -r ~/.zshrc.local ] && . ~/.zshrc.local
 
-# Ensure user-local bin is on PATH.
-export PATH="$HOME/.local/bin:$PATH"
+# Build PATH from chezmoi data.
+{{ template "setup-path.tmpl" dict "paths" .paths }}

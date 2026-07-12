@@ -32,6 +32,18 @@
 {{-   end -}}
 {{- end -}}
 
+encryption = "age"
+
+[age]
+{{- if $isDevops }}
+    # Devops role (devcontainer): ephemeral key fetched from 1Password via hooks.
+    # The key is written to /tmp before apply and deleted after — never persisted.
+    identity = "/tmp/chezmoi-age-key.txt"
+{{- else }}
+    identity = "~/.config/age/key.txt"
+{{- end }}
+    recipient = "age1m7qs8zz9r2c9qqflahclxd0z6gfpeq44pawv7vwzw03a93dk4usscnxazq"
+
 [data]
     role = {{ $role | quote }}
     gui  = {{ $gui }}
@@ -53,18 +65,6 @@
 {{- range $tool, $val := $_moduleTools }}
     {{ $tool | quote }} = {{ $val }}
 {{- end }}
-
-encryption = "age"
-
-[age]
-{{- if $isDevops }}
-    # Devops role (devcontainer): ephemeral key fetched from 1Password via hooks.
-    # The key is written to /tmp before apply and deleted after — never persisted.
-    identity = "/tmp/chezmoi-age-key.txt"
-{{- else }}
-    identity = "~/.config/age/key.txt"
-{{- end }}
-    recipient = "age1m7qs8zz9r2c9qqflahclxd0z6gfpeq44pawv7vwzw03a93dk4usscnxazq"
 
 {{- if $isDevops }}
 # Ephemeral age key hooks — fetch from 1Password before apply, delete after.
