@@ -1,0 +1,48 @@
+# SSH key management helpers — loaded for all hosts.
+
+# Generate an ed25519 SSH keypair.
+# The email comment is taken from the global git config (set by chezmoi
+# from the git_email data field in .chezmoi.toml.tmpl).
+#
+# Usage: ssh_gen_key [key-name]
+#   key-name  Base name for the key file (default: id_ed25519)
+#             The key is written to ~/.ssh/<key-name> and the public key
+#             to ~/.ssh/<key-name>.pub
+#
+# Examples:
+#   ssh_gen_key                    # creates ~/.ssh/id_ed25519
+#   ssh_gen_key id_ed25519_server  # creates ~/.ssh/id_ed25519_server
+ssh_gen_key() {
+  local key_name="${1:-id_ed25519}"
+  local key_path="$HOME/.ssh/${key_name}"
+
+  # Get email from git global config (set by chezmoi via dot_gitconfig.tmpl).
+  local email
+  email=$(git config --global user.email 2>/dev/null)
+
+  if [ -z "$email" ]; then
+    echo "Warning: No email found in 'git config --global user.email'." >&2
+    echo "Set it with: git config --global user.email \"you@example.com\"" >&2
+    return 1
+  fi
+
+  # Refuse to overwrite an existing key.
+  if [ -f "$key_path" ]; then
+    echo "Key already exists at ${key_path} — refusing to overwrite." >&2
+    return 1
+  fi
+
+  # Ensure ~/.ssh exists with correct permissions.
+  mkdir -p "$HOME/.ssh"
+  chmod 700 "$HOME/.ssh"
+
+  # Generate the keypair (no passphrase prompt — pass -N "" for empty,
+  # or omit the flag to prompt interactively).
+  ssh-keygen -t ed25519 -C "$email" -f "$key_path"
+
+  echo
+  echo "SSH keypair generated:"
+  echo "  Private key: ${key_path}"
+  echo "  Public key:  ${key_path}.pub"
+  echo "  Email:       ${email}"
+}

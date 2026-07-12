@@ -8,6 +8,7 @@
 
 [fragments]
 # Fragments are shell-agnostic and can be loaded in both bash and zsh
+ssh_functions = ["laptop", "server", "vm", "devops"]
 docker_functions = ["laptop", "server", "devops"]
 tailscale_functions = ["laptop", "server", "vm", "devops"]
 multimedia_functions = ["laptop", "gui"]
