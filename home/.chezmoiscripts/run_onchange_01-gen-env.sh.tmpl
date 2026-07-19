@@ -20,40 +20,55 @@ AGE_KEY="${HOME}/.config/age/key.txt"
 
 trap 'rm -f "$TMP_ENV"' EXIT
 
-if [ -f "$ENV_TXT_AGE" ]; then
-  if [ -f "$AGE_KEY" ]; then
-    if command -v age >/dev/null 2>&1; then
-      age --decrypt --identity "$AGE_KEY" --output "$TMP_ENV" "$ENV_TXT_AGE"
-    elif chezmoi age decrypt --help >/dev/null 2>&1; then
-      chezmoi age decrypt --identity "$AGE_KEY" "$ENV_TXT_AGE" > "$TMP_ENV"
-    else
-      echo "No age decrypt tool available for env.txt.age." >&2
-      exit 1
-    fi
-  else
-    echo "Age identity not found at $AGE_KEY; skipping gen-env."
-    exit 0
+_decrypt_to_file() {
+  local encrypted="$1"
+  local output="$2"
+  if [ ! -f "$encrypted" ]; then
+    echo "Encrypted file not found: $encrypted" >&2
+    return 1
   fi
-elif [ -f "$SECRETS_AGE" ]; then
   if [ ! -f "$AGE_KEY" ]; then
     echo "Age identity not found at $AGE_KEY; skipping gen-env."
     exit 0
   fi
+  if command -v age >/dev/null 2>&1; then
+    age --decrypt --identity "$AGE_KEY" --output "$output" "$encrypted"
+    return $?
+  fi
+  if chezmoi age decrypt --help >/dev/null 2>&1; then
+    chezmoi age decrypt "$encrypted" > "$output"
+    return $?
+  fi
+  echo "No age decrypt tool available (install age or use chezmoi with age identity in config)." >&2
+  return 1
+}
 
-  decrypt_secrets() {
-    if chezmoi age decrypt --help >/dev/null 2>&1; then
-      chezmoi age decrypt --identity "$AGE_KEY" "$SECRETS_AGE"
-      return $?
-    fi
-    if command -v age >/dev/null 2>&1; then
-      age --decrypt --identity "$AGE_KEY" "$SECRETS_AGE"
-      return $?
-    fi
-    echo "No age decrypt tool available (chezmoi age decrypt or age binary)." >&2
+_decrypt_to_stdout() {
+  local encrypted="$1"
+  if [ ! -f "$encrypted" ]; then
+    echo "Encrypted file not found: $encrypted" >&2
     return 1
-  }
+  fi
+  if [ ! -f "$AGE_KEY" ]; then
+    echo "Age identity not found at $AGE_KEY; skipping gen-env."
+    exit 0
+  fi
+  if command -v age >/dev/null 2>&1; then
+    age --decrypt --identity "$AGE_KEY" "$encrypted"
+    return $?
+  fi
+  if chezmoi age decrypt --help >/dev/null 2>&1; then
+    chezmoi age decrypt "$encrypted"
+    return $?
+  fi
+  echo "No age decrypt tool available (install age or use chezmoi with age identity in config)." >&2
+  return 1
+}
 
-  decrypt_secrets \
+if [ -f "$ENV_TXT_AGE" ]; then
+  _decrypt_to_file "$ENV_TXT_AGE" "$TMP_ENV"
+elif [ -f "$SECRETS_AGE" ]; then
+  _decrypt_to_stdout "$SECRETS_AGE" \
     | python3 -c "
 import sys, tomllib
 data = tomllib.load(sys.stdin.buffer)
