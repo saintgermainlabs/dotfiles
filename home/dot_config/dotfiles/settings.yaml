@@ -1,0 +1,5 @@
+# Dotfiles runtime settings (applied to ~/.config/dotfiles/settings.yaml).
+# Edit locally; changes take effect in new shell sessions without chezmoi apply.
+
+# Set to 1 to print coloured bootstrap logs (each compiled module + rc file).
+VERBOSE: 0

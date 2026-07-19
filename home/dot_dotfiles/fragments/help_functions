@@ -5,6 +5,14 @@ MANUAL_LAST_COUNT=0
 
 _manual_files() {
   local shell_dir="$HOME/.dotfiles"
+  local compiled="${shell_dir}/compiled/shell"
+
+  if [ -f "$compiled" ]; then
+    printf '%s\n' "$compiled"
+    return 0
+  fi
+
+  # Fallback when compiled/shell is missing (e.g. before first chezmoi apply).
   local -a files=()
   local seen="|"
 
@@ -78,12 +86,20 @@ _manual_scan_file() {
 
   local rel="${file#${HOME}/.dotfiles/}"
   rel="${rel#${HOME}/.config/dotfiles/}"
+  rel="${rel#${HOME}/.dotfiles/compiled/}"
   [ "$rel" = "$file" ] && rel="${file##*/}"
 
   local comment_block="" file_header_shown=0 count=0
   local line nm body desc internal
 
   while IFS= read -r line || [ -n "$line" ]; do
+    if [[ "$line" =~ ^#[[:space:]]*──[[:space:]]*(.+)[[:space:]]──[[:space:]]*$ ]]; then
+      rel="${BASH_REMATCH[1]}"
+      comment_block=""
+      file_header_shown=0
+      continue
+    fi
+
     if [[ "$line" =~ ^[[:space:]]*# ]]; then
       comment_block+="${line}"$'\n'
       continue

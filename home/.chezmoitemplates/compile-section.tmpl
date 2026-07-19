@@ -1,0 +1,7 @@
+{{- /*
+  compile-section.tmpl — section marker + verbose log + content include.
+  Context: .name (string), .path (source path under home/)
+*/ -}}
+# ── {{ .name }} ──
+_dotfiles_log_section "{{ .name }}"
+{{ include .path }}

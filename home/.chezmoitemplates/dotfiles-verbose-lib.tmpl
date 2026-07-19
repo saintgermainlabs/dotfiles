@@ -1,0 +1,47 @@
+{{- /*
+  dotfiles-verbose-lib.tmpl — runtime verbose logging for compiled/shell.
+  Reads ~/.config/dotfiles/settings.yaml (verbose: 1).
+*/ -}}
+# Verbose bootstrap logging (controlled by ~/.config/dotfiles/settings.yaml).
+_dotfiles_load_settings() {
+  DOTFILES_VERBOSE=0
+  local settings="${HOME}/.config/dotfiles/settings.yaml"
+  [ -r "$settings" ] || return 0
+  if grep -Eq '^[[:space:]]*VERBOSE:[[:space:]]*1([[:space:]]*(#.*)?)?$' "$settings" 2>/dev/null; then
+    DOTFILES_VERBOSE=1
+  fi
+}
+
+_dotfiles_verbose_init_colors() {
+  if [ -t 2 ] && [ "${DOTFILES_VERBOSE:-0}" = "1" ]; then
+    DOTFILES_V_TAG=$'\033[1;35m'    # magenta tag
+    DOTFILES_V_LABEL=$'\033[1;36m'  # cyan label
+    DOTFILES_V_DIM=$'\033[2m'
+    DOTFILES_V_RESET=$'\033[0m'
+  else
+    DOTFILES_V_TAG="" DOTFILES_V_LABEL="" DOTFILES_V_DIM="" DOTFILES_V_RESET=""
+  fi
+}
+
+_dotfiles_log() {
+  [ "${DOTFILES_VERBOSE:-0}" = "1" ] || return 0
+  printf '%b\n' "$1" >&2
+}
+
+_dotfiles_log_bootstrap() {
+  local rc="${1:-${DOTFILES_BOOTSTRAP:-unknown}}"
+  _dotfiles_log "${DOTFILES_V_TAG}[dotfiles]${DOTFILES_V_RESET} bootstrapped from ${DOTFILES_V_LABEL}${rc}${DOTFILES_V_RESET}"
+}
+
+_dotfiles_log_section() {
+  local section="$1"
+  _dotfiles_log "${DOTFILES_V_TAG}[dotfiles]${DOTFILES_V_RESET}   ${DOTFILES_V_DIM}+${DOTFILES_V_RESET} ${DOTFILES_V_LABEL}${section}${DOTFILES_V_RESET}"
+}
+
+_dotfiles_log_compile_done() {
+  _dotfiles_log "${DOTFILES_V_TAG}[dotfiles]${DOTFILES_V_RESET} ${DOTFILES_V_DIM}compiled/shell ready${DOTFILES_V_RESET}"
+}
+
+_dotfiles_load_settings
+_dotfiles_verbose_init_colors
+_dotfiles_log_bootstrap "${DOTFILES_BOOTSTRAP:-unknown}"

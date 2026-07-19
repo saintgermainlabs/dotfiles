@@ -72,6 +72,5 @@ venv() {
   fi
 }
 
-# manual() and aliases() have been moved to fragments/help_functions,
-# which is loaded last so it can see all aliases and functions defined
-# by every other module and fragment.
+# manual() and aliases() live in fragments/help_functions, compiled last into
+# ~/.dotfiles/compiled/shell by chezmoi apply.

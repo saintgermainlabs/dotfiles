@@ -23,7 +23,8 @@ home/
 │   ├── container/         # k8s/terraform helpers (devops, local, remote roles)
 │   ├── local/             # local devcontainer env defaults
 │   ├── remote/            # remote devcontainer env defaults
-│   └── fragments/         # optional, role-gated shell function files
+│   ├── compiled/          # shell.tmpl → ~/.dotfiles/compiled/shell (generated)
+│   └── fragments/         # optional, role-gated shell function files (source-only)
 ├── dot_local/             # ~/.local/* binaries and helpers
 ├── private_dot_ssh/       # ~/.ssh/* templates
 ├── dot_bashrc.tmpl        # ~/.bashrc
@@ -133,6 +134,20 @@ provide the canonical hostname mapping when `DOTFILES_HOSTNAME` is set.
 ## Shell configuration
 
 Primary shell: `bash`. Optional: `zsh`.
+
+At `chezmoi apply`, all aliases, functions, role modules, and enabled fragments
+are **compiled** into a single file: `~/.dotfiles/compiled/shell`. Both
+`~/.bashrc` and `~/.zshrc` source this file first, then load prompt/tool init,
+PATH, and late-init (zoxide) separately.
+
+Runtime settings live in `~/.config/dotfiles/settings.yaml`. Set `VERBOSE: 1`
+to print coloured logs (to stderr) listing each compiled module and whether
+bootstrap came from `bashrc` or `zshrc`.
+
+Source modules under `dot_dotfiles/` (common/, fragments/, laptop/, etc.) are
+**not** applied individually — they are merged by
+`.chezmoitemplates/compile-shell.tmpl`. Edit the source files in the repo;
+re-run `chezmoi apply` to regenerate `compiled/shell`.
 
 Changes to shell startup files must:
 

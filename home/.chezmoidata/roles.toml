@@ -102,8 +102,6 @@ list = [
 # "roles.<role>" files are additionally loaded when matching that role.
 
 common = [
-  "common/aliases",
-  "common/functions",
   "common/prompt",
 ]
 

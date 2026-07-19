@@ -4,6 +4,16 @@
 /.chezmoiignore.tmpl
 /.chezmoiscripts/
 
+# Compiled into ~/.dotfiles/compiled/shell at apply time (source-only modules).
+.dotfiles/common/aliases
+.dotfiles/common/functions
+.dotfiles/laptop/
+.dotfiles/container/
+.dotfiles/local/
+.dotfiles/remote/
+.dotfiles/fragments/
+.config/dotfiles/role-aliases
+
 # GUI-conditional target paths (gated on .gui, not .role).
 {{- if not .gui }}
 .local/bin/gui/

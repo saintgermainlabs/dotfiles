@@ -1,0 +1,33 @@
+{{- /*
+  compile-shell.tmpl — concatenate aliases, functions, role modules, and
+  fragments into a single shell file at chezmoi apply time.
+*/ -}}
+{{ template "dotfiles-verbose-lib.tmpl" . }}
+
+{{ template "compile-section.tmpl" dict "name" "common/aliases" "path" "dot_dotfiles/common/aliases" }}
+{{ template "compile-section.tmpl" dict "name" "common/functions" "path" "dot_dotfiles/common/functions" }}
+
+{{- range index .bootstrap.roles .role }}
+{{ template "compile-section.tmpl" dict "name" . "path" (printf "dot_dotfiles/%s" .) }}
+{{- end }}
+
+{{- $frags := .fragments -}}
+{{- range $name, $contexts := $frags -}}
+{{-   $enabled := false -}}
+{{-   range $contexts -}}
+{{-     if or (eq . $.role) (and (eq . "gui") $.gui) -}}
+{{-       $enabled = true -}}
+{{-     end -}}
+{{-   end -}}
+{{-   if and $enabled (ne $name "help_functions") }}
+{{ template "compile-section.tmpl" dict "name" (printf "fragments/%s" $name) "path" (printf "dot_dotfiles/fragments/%s" $name) }}
+{{-   end -}}
+{{- end -}}
+
+# ── role-aliases ──
+_dotfiles_log_section "role-aliases"
+{{ template "role-aliases.tmpl" . }}
+
+{{ template "compile-section.tmpl" dict "name" "fragments/help_functions" "path" "dot_dotfiles/fragments/help_functions" }}
+
+_dotfiles_log_compile_done
