@@ -28,6 +28,14 @@ Templates/
 .local/bin/devops/
 {{- end }}
 
+{{- if ne .role "local" }}
+.local/bin/local/
+{{- end }}
+
+{{- if ne .role "remote" }}
+.local/bin/remote/
+{{- end }}
+
 # Role-specific scripts (keyed on .role, not hostname).
 {{- if ne .role "laptop" }}
 .chezmoiscripts/laptop

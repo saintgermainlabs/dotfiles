@@ -1,0 +1,130 @@
+# Help functions — provides a manual page for all functions and aliases.
+# This fragment is loaded last so it can see all aliases and functions
+# defined by every other module and fragment.
+
+# Print a manual of aliases and functions from dotfiles shell modules.
+manual() {
+  local pattern="$1"
+  local shell_dir="$HOME/.dotfiles"
+  local files=(
+    "$shell_dir/common/aliases"
+    "$shell_dir/common/functions"
+    "$shell_dir/common/prompt"
+    "$shell_dir/bash/init"
+    "$shell_dir/bash/late-init"
+    "$shell_dir/zsh/init"
+    "$shell_dir/zsh/late-init"
+    "$shell_dir/laptop/ssh"
+    "$shell_dir/laptop/server"
+    "$shell_dir/devops/k8s"
+    "$shell_dir/devops/terraform"
+  )
+
+  # Also scan all loaded fragments.
+  local frag
+  for frag in "$shell_dir"/fragments/*; do
+    [ -f "$frag" ] && files+=("$frag")
+  done
+
+  local title name arrow reset
+  if [ -t 1 ]; then
+    title=$'\033[1;35m'
+    name=$'\033[1;33m'
+    arrow=$'\033[2;37m'
+    reset=$'\033[0m'
+  fi
+
+  local total=0
+  local file
+  for file in "${files[@]}"; do
+    [ -f "$file" ] || continue
+    local rel="${file#$shell_dir/}"
+    local file_header_shown=0
+
+    while IFS= read -r line || [ -n "$line" ]; do
+      if [[ "$line" =~ ^alias[[:space:]]+([^=]+)=(.*)$ ]]; then
+        local nm="${BASH_REMATCH[1]}"
+        local body="${BASH_REMATCH[2]}"
+        body="${body#[\"\']}"; body="${body%[\"\']}"
+        if [ -n "$pattern" ] && ! grep -qi -- "$pattern" <<<"$nm $body"; then
+          continue
+        fi
+        if [ "$file_header_shown" -eq 0 ]; then
+          printf "\n${title}══ %s ══${reset}\n" "$rel"
+          file_header_shown=1
+        fi
+        printf "  ${name}%-26s${arrow} → ${reset}%s\n" "$nm" "$body"
+        ((total++))
+      elif [[ "$line" =~ ^([a-zA-Z_][a-zA-Z0-9_-]*)[[:space:]]*\(\) ]] || [[ "$line" =~ ^function[[:space:]]+([a-zA-Z_][a-zA-Z0-9_-]*) ]]; then
+        local nm="${BASH_REMATCH[1]}"
+        if [ -n "$pattern" ] && ! grep -qi -- "$pattern" <<<"$nm"; then
+          continue
+        fi
+        if [ "$file_header_shown" -eq 0 ]; then
+          printf "\n${title}══ %s ══${reset}\n" "$rel"
+          file_header_shown=1
+        fi
+        printf "  ${name}%-26s${reset}\n" "$nm()"
+        ((total++))
+      fi
+    done < "$file"
+  done
+
+  if [ -n "$pattern" ] && [ "$total" -eq 0 ]; then
+    echo "manual: no matches for: $pattern" >&2
+    return 1
+  fi
+  echo
+}
+
+# List aliases from the common aliases file.
+aliases() {
+  local pattern="$1"
+  local file="$HOME/.dotfiles/common/aliases"
+
+  if [ ! -f "$file" ]; then
+    echo "aliases: $file not found" >&2
+    return 1
+  fi
+
+  local hdr name arrow reset
+  if [ -t 1 ]; then
+    hdr=$'\033[1;36m'; name=$'\033[1;33m'; arrow=$'\033[2;37m'; reset=$'\033[0m'
+  fi
+
+  local section="" section_shown=0 count=0
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [[ "$line" =~ ^#(.*)$ ]]; then
+      local c="${BASH_REMATCH[1]}"
+      c="${c# }"
+      if [[ "$c" =~ ^[A-Z] ]] && [[ ! "$c" =~ [.,:!?] ]] && [ "$(wc -w <<<"$c")" -le 4 ]; then
+        section="$c"; section_shown=0
+      fi
+      continue
+    fi
+
+    if [[ "$line" =~ ^alias[[:space:]]+([^=]+)=(.*)$ ]]; then
+      local a_name="${BASH_REMATCH[1]}"
+      local a_cmd="${BASH_REMATCH[2]}"
+      a_cmd="${a_cmd#[\"\']}"; a_cmd="${a_cmd%[\"\']}"
+
+      if [ -n "$pattern" ] && ! grep -qi -- "$pattern" <<<"$a_name $a_cmd"; then
+        continue
+      fi
+
+      if [ "$section_shown" -eq 0 ] && [ -n "$section" ]; then
+        printf "\n${hdr}── %s ──${reset}\n" "$section"
+        section_shown=1
+      fi
+      printf "  ${name}%-22s${arrow} → ${reset}%s\n" "$a_name" "$a_cmd"
+      ((count++))
+    fi
+  done < "$file"
+
+  if [ -n "$pattern" ] && [ "$count" -eq 0 ]; then
+    echo "No aliases matching: $pattern" >&2
+    return 1
+  fi
+  echo
+}

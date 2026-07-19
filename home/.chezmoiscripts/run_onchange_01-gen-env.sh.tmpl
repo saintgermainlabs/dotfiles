@@ -1,28 +1,74 @@
 #!/bin/bash
 # Generate ~/.dotfiles/dot_env/.env from encrypted secrets.
-# Re-runs when the encrypted secrets file changes.
-# hash of encrypted secrets to force rerun: {{ include (joinPath .chezmoi.sourceDir ".." "secrets" "secrets.toml.age") | sha256sum }}
+# Prefers secrets/env.txt.age; falls back to legacy secrets/secrets.toml.age.
+{{- $envTxtAge := joinPath .chezmoi.sourceDir ".." "secrets" "env.txt.age" -}}
+{{- $secretsPath := joinPath .chezmoi.sourceDir ".." "secrets" "secrets.toml.age" -}}
+{{- if stat $envTxtAge }}
+# hash of encrypted env.txt.age to force rerun: {{ include $envTxtAge | sha256sum }}
+{{- else if stat $secretsPath }}
+# hash of encrypted secrets to force rerun: {{ include $secretsPath | sha256sum }}
+{{- else }}
+# hash of encrypted secrets to force rerun: (no encrypted env file present)
+{{- end }}
 set -euo pipefail
 
-AGE_KEY="${HOME}/.config/age/key.txt"
+ENV_TXT_AGE="{{ joinPath .chezmoi.sourceDir ".." "secrets" "env.txt.age" }}"
 SECRETS_AGE="{{ joinPath .chezmoi.sourceDir ".." "secrets" "secrets.toml.age" }}"
 ENV_FILE="${HOME}/.dotfiles/dot_env/.env"
 TMP_ENV="$(mktemp)"
+AGE_KEY="${HOME}/.config/age/key.txt"
 
 trap 'rm -f "$TMP_ENV"' EXIT
 
-age --decrypt --identity "$AGE_KEY" "$SECRETS_AGE" \
-  | python3 -c "
+if [ -f "$ENV_TXT_AGE" ]; then
+  if [ -f "$AGE_KEY" ]; then
+    if command -v age >/dev/null 2>&1; then
+      age --decrypt --identity "$AGE_KEY" --output "$TMP_ENV" "$ENV_TXT_AGE"
+    elif chezmoi age decrypt --help >/dev/null 2>&1; then
+      chezmoi age decrypt --identity "$AGE_KEY" "$ENV_TXT_AGE" > "$TMP_ENV"
+    else
+      echo "No age decrypt tool available for env.txt.age." >&2
+      exit 1
+    fi
+  else
+    echo "Age identity not found at $AGE_KEY; skipping gen-env."
+    exit 0
+  fi
+elif [ -f "$SECRETS_AGE" ]; then
+  if [ ! -f "$AGE_KEY" ]; then
+    echo "Age identity not found at $AGE_KEY; skipping gen-env."
+    exit 0
+  fi
+
+  decrypt_secrets() {
+    if chezmoi age decrypt --help >/dev/null 2>&1; then
+      chezmoi age decrypt --identity "$AGE_KEY" "$SECRETS_AGE"
+      return $?
+    fi
+    if command -v age >/dev/null 2>&1; then
+      age --decrypt --identity "$AGE_KEY" "$SECRETS_AGE"
+      return $?
+    fi
+    echo "No age decrypt tool available (chezmoi age decrypt or age binary)." >&2
+    return 1
+  }
+
+  decrypt_secrets \
+    | python3 -c "
 import sys, tomllib
 data = tomllib.load(sys.stdin.buffer)
 for k, v in data.items():
     print(f'export {k}=\"{v}\"')
 " > "$TMP_ENV"
+else
+  echo "No encrypted env at $ENV_TXT_AGE or $SECRETS_AGE; skipping gen-env."
+  exit 0
+fi
 
-# Only overwrite if content changed (avoid unnecessary mtime bumps)
 if ! cmp -s "$TMP_ENV" "$ENV_FILE" 2>/dev/null; then
   mkdir -p "$(dirname "$ENV_FILE")"
   mv "$TMP_ENV" "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
   echo "Wrote $ENV_FILE"
 else
   echo "$ENV_FILE unchanged"

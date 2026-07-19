@@ -34,19 +34,10 @@ Invoke this skill when the user:
 
 ### Step 1: Install Coolify CLI
 
-If the CLI is not already installed, use the bundled installation script:
-
-```bash
-bash scripts/install_coolify_cli.sh
-```
-
-This installs to `~/.local/bin/coolify`. Ensure this directory is in the user's PATH:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-Add this line to the user's shell configuration file (`~/.bashrc`, `~/.zshrc`, etc.) for persistence.
+If the CLI is not already installed, chezmoi installs it via
+`home/.chezmoiscripts/run_once_after_20-install-coolify-cli.sh.tmpl` to
+`~/.local/bin/coolify`. In the devcontainer, this runs automatically during
+`post-create.sh`.
 
 ### Step 2: Configure Context
 
@@ -71,10 +62,17 @@ This confirms successful authentication and connectivity.
 
 ### Health Check
 
-Run the bundled health check script:
+Run the health check script:
 
 ```bash
-bash scripts/check_health.sh
+bash .devcontainer/scripts/check_health.sh
+```
+
+Or use shell helpers after sourcing dotfiles:
+
+```bash
+coolify_health
+dozzle_health
 ```
 
 This displays:

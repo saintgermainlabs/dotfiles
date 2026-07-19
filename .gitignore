@@ -1,8 +1,20 @@
+# Copy to .devcontainer/.env and adjust vault paths.
+# Resolved on the host before devcontainer start or image tests.
+# Copy: cp .devcontainer/.env.example .devcontainer/.env
+
+# Rendered / resolved env (never commit)
+.devcontainer/.env
+.devcontainer/.env.runtime
+.devcontainer/profile
+.devcontainer/.profile.runtime
+.devcontainer/secrets/primordial.env
+
 # Rendered secrets / machine-local files
 *.env
 !*.env.example
 dot_dotfiles/bash/.env
 secrets/secrets.toml
+secrets/env.txt
 dot_dotfiles/dot_env/.env
 
 # Secret / private directories (keep .gitkeep placeholders)

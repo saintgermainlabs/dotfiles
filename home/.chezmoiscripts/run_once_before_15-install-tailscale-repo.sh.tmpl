@@ -1,0 +1,42 @@
+#!/bin/bash
+# Add Tailscale apt repository and install tailscale when required by role/modules.
+set -euo pipefail
+
+ROLE="{{ .role }}"
+NEEDS_TAILSCALE=false
+
+{{- range .module_packages }}
+{{- if eq . "tailscale" }}
+NEEDS_TAILSCALE=true
+{{- end }}
+{{- end }}
+
+{{- if .devcontainer }}
+NEEDS_TAILSCALE=true
+{{- end }}
+
+if [ "$NEEDS_TAILSCALE" = false ]; then
+  echo "Tailscale not required for role ${ROLE}; skipping."
+  exit 0
+fi
+
+if command -v tailscale >/dev/null 2>&1; then
+  echo "tailscale already installed ($(tailscale version 2>/dev/null | head -1 || echo unknown))"
+  exit 0
+fi
+
+if ! command -v apt-get >/dev/null 2>&1; then
+  echo "apt-get not found; cannot install tailscale." >&2
+  exit 1
+fi
+
+echo "Adding Tailscale apt repository..."
+curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/$(. /etc/os-release && echo "${VERSION_CODENAME}").noarmor.gpg" \
+  | sudo tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/$(. /etc/os-release && echo "${VERSION_CODENAME}").tailscale-keyring.list" \
+  | sudo tee /etc/apt/sources.list.d/tailscale.list >/dev/null
+
+sudo apt-get update
+sudo apt-get install -y tailscale
+
+echo "tailscale installed ($(tailscale version 2>/dev/null | head -1 || echo unknown))"

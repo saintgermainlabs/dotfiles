@@ -1,0 +1,12 @@
+{
+  "name": "Dotfiles Devcontainer (Local)",
+  "extends": "./devcontainer.json",
+  "remoteEnv": {
+    "SSH_AUTH_SOCK": "${localEnv:SSH_AUTH_SOCK}"
+  },
+  "secrets": {
+    "TAILSCALE_AUTHKEY": {
+      "description": "Reusable or ephemeral Tailscale auth key for this devcontainer"
+    }
+  }
+}

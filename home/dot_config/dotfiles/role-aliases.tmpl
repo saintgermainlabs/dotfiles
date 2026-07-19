@@ -10,7 +10,7 @@ alias ports='ss -tulpn'
 alias tailscale-status='tailscale status'
 {{ end }}
 
-{{ if eq .role "devops" }}
+{{ if or (eq .role "devops") (eq .role "local") (eq .role "remote") }}
 alias dockerlogs='docker logs -f'
 alias dps='docker ps --format "table {{`{{.Names}}`}}\t{{`{{.Status}}`}}\t{{`{{.Ports}}`}}"'
 alias dcom='docker compose'

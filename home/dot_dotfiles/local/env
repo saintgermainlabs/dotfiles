@@ -1,0 +1,6 @@
+# Local devcontainer defaults — reach Coolify/Docker/Dozzle on the remote host.
+# Override in ~/.dotfiles/dot_env/.env (gitignored).
+
+export COOLIFY_DOCKER_HOST="${COOLIFY_DOCKER_HOST:-root@ubuntu-24.tiger-bushmaster.ts.net}"
+export DOZZLE_HOST="${DOZZLE_HOST:-ubuntu-24.tiger-bushmaster.ts.net}"
+export DOZZLE_PORT="${DOZZLE_PORT:-8888}"

@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        host: [ubuntu-laptop, ubuntu-24, vm-dev01, unknown-host]
+        host: [ubuntu-laptop, ubuntu-24, vm-dev01, devops-dev01, unknown-host]
     steps:
       - uses: actions/checkout@v4
 

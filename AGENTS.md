@@ -27,8 +27,11 @@ home/
 
 Two independent axes describe a host:
 
-- **Role**: what the machine *is*. One of `laptop`, `server`, `vm`, `devops`.
+- **Role**: what the machine *is*. One of `laptop`, `server`, `vm`, `devops`, `local`, `remote`.
   Controls role-specific shell helpers, SSH aliases, server packages, etc.
+  - `devops` — legacy devcontainer role (still supported)
+  - `local` — devcontainer on the laptop; remote Docker/Coolify/Dozzle via Tailscale + SSH
+  - `remote` — devcontainer on the Coolify host; local Docker socket, Dozzle on localhost
 - **GUI**: whether the machine has a graphical desktop. Boolean.
   Controls GUI packages, GUI helper scripts, Nautilus templates, autostart, etc.
 
@@ -87,19 +90,21 @@ For dev containers, mount the 1Password socket from the host or use a Service
 Account token. The token must have access to the vault containing the age key
 item (`op://Security Keys/chezmoi age key/key.txt`).
 
-### Ephemeral age key for devops role
+### Age key for devcontainer roles
 
-The `devops` role (used by devcontainers) uses an **ephemeral age key** pattern
-instead of persisting the key to `~/.config/age/key.txt`:
+Devcontainers fetch the age key during primordial bootstrap:
 
-- `home/.chezmoi.toml.tmpl` sets `identity = "/tmp/chezmoi-age-key.txt"` when
-  `role == "devops"` and configures `hooks.read-source-state.pre` to fetch the
-  key from 1Password before apply, and `hooks.apply.post` to delete it after.
-- `home/.chezmoiscripts/run_once_before_02-setup-age-key.sh.tmpl` skips the
-  persistent key setup for the `devops` role (the hooks handle it).
+- `.devcontainer/scripts/setup-age-key.sh` downloads `op://Security Keys/chezmoi age key/key.txt`
+  to `~/.config/age/key.txt` after initial `op` authentication.
+- `.devcontainer/scripts/decrypt-primordial-env.sh` decrypts the baked-in
+  `.devcontainer/secrets/primordial.env.age` — the **first `.env`** for all primordial-based
+  containers — into `/var/lib/primordial/primordial.env` and sources it.
+- `home/.chezmoi.toml.tmpl` uses `identity = "~/.config/age/key.txt"` for all roles.
+- `home/.chezmoiscripts/run_onchange_01-gen-env.sh.tmpl` decrypts repo `secrets/env.txt.age`
+  into `~/.dotfiles/dot_env/.env` using the same key.
 
-This means the age key exists on disk only for the duration of `chezmoi apply`.
-Each apply re-fetches it from 1Password, so `op` must be authenticated first.
+Initial `op` auth requires 1Password app integration or a host bootstrap token; after
+primordial env decrypt, secrets from the age-encrypted file are available in the shell.
 
 ### DOTFILES_ROLE env var fallback
 
@@ -110,8 +115,10 @@ the `DOTFILES_ROLE` environment variable instead of defaulting to `server`:
 {{- $role := dig $hostname "role" (env "DOTFILES_ROLE" | default "server") $hostsFile.hosts -}}
 ```
 
-The devcontainer sets `DOTFILES_ROLE=devops` in `remoteEnv` so chezmoi picks up
-the correct role without needing the hostname in `hosts.toml`.
+The devcontainer sets `DOTFILES_ROLE=local` (laptop) or `DOTFILES_ROLE=remote` (server)
+in `remoteEnv` so chezmoi picks up the correct role without needing the hostname in
+`hosts.toml`. Host entries `devops-local01` and `devops-remote01` in `hosts.toml`
+provide the canonical hostname mapping when `DOTFILES_HOSTNAME` is set.
 
 ## Shell configuration
 
@@ -140,9 +147,20 @@ and merged in `home/dot_config/mise/config.toml.tmpl`.
 - **Laptop** may include Docker, Node.js, GUI apps, development SDKs, and desktop configuration.
 - **Server** prioritizes security, stability, and a minimal footprint. Avoid GUI software.
 - **VM** stays lightweight and disposable.
-- **DevOps** is a dev container role with all common fragments, Docker, Kubernetes
-  (kubectl, helm, k9s), Terraform, and Coolify management tools. Designed for
-  containerized CI/CD and infrastructure-as-code workflows.
+- **DevOps / devcontainer** — three roles share k8s/terraform helpers and Coolify
+  management, but differ in environment defaults:
+  - **`local`** (`devops-local01`) — devcontainer on the laptop; SSH keys bind-mounted,
+    remote Docker context, Dozzle on the Coolify host via Tailscale.
+  - **`remote`** (`devops-remote01`) — devcontainer on the Coolify host; local Docker
+    socket, Dozzle on `127.0.0.1`, no SSH Docker context.
+  - **`devops`** — legacy alias; same ephemeral age key behavior as `local`/`remote`.
+  Mise installs kubectl, helm, k9s, terraform, and lazydocker for all three.
+  The repo-local devcontainer (`.devcontainer/`) sets `DOTFILES_ROLE=local` by default;
+  use `.devcontainer/devcontainer.remote.json` on the server.
+  Published base images: `ghcr.io/saintgermainlabs/linux-mgmt-primordial:24.04` and
+  `ghcr.io/saintgermainlabs/linux-mgmt-base:24.04` (see `.github/workflows/devcontainer-base.yml`).
+  Secrets: `OP_SERVICE_ACCOUNT_TOKEN` and `TAILSCALE_AUTHKEY` via devcontainer secrets.
+  Remote Docker inspection uses SSH-backed contexts (`docker_remote_use`), not TCP 2375.
 SSH configuration is templated. Public servers may be listed in
 `home/.chezmoidata/roles.toml`. Private servers must be supplied via local
 chezmoi data or environment variables. Never deploy laptop-only SSH aliases

@@ -2,28 +2,34 @@
 # Install 1Password CLI from the official apt repository (idempotent).
 set -euo pipefail
 
-if command -v op >/dev/null 2>&1; then
-  echo "1Password CLI already installed: $(op --version 2>/dev/null || echo unknown)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/apt.sh
+source "${SCRIPT_DIR}/lib/apt.sh"
+
+log() { printf '[install-op-cli] %s\n' "$*"; }
+
+if cmd_exists op; then
+  log "1Password CLI already installed: $(op --version 2>/dev/null || echo unknown)"
   exit 0
 fi
 
-echo "Installing 1Password CLI..."
+if apt_pkg_installed 1password-cli; then
+  log "1Password CLI package already installed: $(op --version 2>/dev/null || echo unknown)"
+  exit 0
+fi
 
-apt_install() {
-  if [ "$(id -u)" -eq 0 ]; then
-    "$@"
-  else
-    sudo "$@"
-  fi
-}
+log "Installing 1Password CLI..."
 
-curl -fsSL https://downloads.1password.com/linux/keys/1password.asc \
-  | apt_install gpg --dearmor -o /usr/share/keyrings/1password-archive-keyring.gpg
+if [ ! -f /usr/share/keyrings/1password-archive-keyring.gpg ]; then
+  curl -fsSL https://downloads.1password.com/linux/keys/1password.asc \
+    | apt_install gpg --dearmor -o /usr/share/keyrings/1password-archive-keyring.gpg
+fi
 
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" \
-  | apt_install tee /etc/apt/sources.list.d/1password.list >/dev/null
+if [ ! -f /etc/apt/sources.list.d/1password.list ]; then
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" \
+    | apt_install tee /etc/apt/sources.list.d/1password.list >/dev/null
+fi
 
-apt_install apt-get update
-apt_install apt-get install -y 1password-cli
+install_apt_packages 1password-cli
 
-echo "1Password CLI installed: $(op --version 2>/dev/null || echo unknown)"
+log "1Password CLI installed: $(op --version 2>/dev/null || echo unknown)"

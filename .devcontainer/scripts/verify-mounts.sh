@@ -87,6 +87,14 @@ else
   log "OK: ~/.ssh mounted with ${ssh_key_count} key file(s)"
 fi
 
+if [ -n "${OP_USE_APP_INTEGRATION:-}" ] && [ "${OP_USE_APP_INTEGRATION}" != "0" ]; then
+  if [ -S "${HOME}/.1password/agent.sock" ] || [ -L "${HOME}/.1password/agent.sock" ]; then
+    log "OK: 1Password agent socket mounted at ~/.1password/agent.sock"
+  else
+    warn "~/.1password/agent.sock not found — enable app integration on the host and rebuild"
+  fi
+fi
+
 if mount_source /var/lib/primordial | grep -q 'devcontainer-primordial-state\|/$'; then
   log "OK: /var/lib/primordial state directory ready"
 else

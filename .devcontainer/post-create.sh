@@ -4,14 +4,21 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PATH="${HOME}/.local/bin:${PATH}"
+# shellcheck source=scripts/lib/op-auth.sh
+source "${REPO_ROOT}/.devcontainer/scripts/lib/op-auth.sh"
+# shellcheck source=scripts/lib/load-profile.sh
+source "${REPO_ROOT}/.devcontainer/scripts/lib/load-profile.sh"
 
 log() { printf '[post-create] %s\n' "$*"; }
 die() { printf '[post-create] ERROR: %s\n' "$*" >&2; exit 1; }
 
-if [ -z "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]; then
-  die "OP_SERVICE_ACCOUNT_TOKEN is not set.
-Rebuild the devcontainer with secrets:
-  Command Palette -> Dev Containers: Rebuild Container and Reopen With Secrets"
+load_devcontainer_profile "${REPO_ROOT}" || die "Could not load devcontainer profile"
+log "Profile=${DEVCONTAINER_PROFILE:-unknown} role=${DOTFILES_ROLE:-unknown} hostname=${DOTFILES_HOSTNAME:-unknown}"
+
+if [ -z "${OP_SERVICE_ACCOUNT_TOKEN:-}" ] && ! op_can_access_vault; then
+  die "1Password is not authenticated.
+Local: enable 1Password desktop app CLI integration and rebuild (see README).
+Remote: set OP_SERVICE_ACCOUNT_TOKEN or rebuild with secrets."
 fi
 
 bootstrap_primordial() {

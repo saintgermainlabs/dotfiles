@@ -5,30 +5,10 @@ FROM ubuntu:24.04 AS primordial
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssh-client \
-    rsync \
-    jq \
-    curl \
-    wget \
-    dnsutils \
-    iputils-ping \
-    netcat-openbsd \
-    htop \
-    vim \
-    ca-certificates \
-    gnupg \
-    restic \
-    age \
-    git \
-    sudo \
-    python3 \
-    util-linux \
-  && rm -rf /var/lib/apt/lists/*
-
 COPY scripts/ /opt/primordial/scripts/
-RUN chmod +x /opt/primordial/scripts/*.sh \
-    && bash /opt/primordial/scripts/install-op-cli.sh \
+COPY secrets/ /opt/primordial/secrets/
+RUN chmod +x /opt/primordial/scripts/*.sh /opt/primordial/scripts/lib/*.sh \
+    && bash /opt/primordial/scripts/install-primordial-packages.sh \
     && mkdir -p /var/lib/primordial \
     && bash /opt/primordial/scripts/probe-env.sh build-time
 
@@ -62,7 +42,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh \
-    && UV_TOOL_BIN_DIR=/usr/local/bin uv tool install --force --python python3.12 --with pip aider-chat@latest
+    && env UV_TOOL_DIR=/usr/local/share/uv/tools UV_TOOL_BIN_DIR=/usr/local/bin \
+       uv tool install --force --python python3.12 --with pip aider-chat@latest
 
 USER ${USERNAME}
 WORKDIR /workspaces/sgdotfilesfresh

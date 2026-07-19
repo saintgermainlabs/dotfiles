@@ -1,0 +1,13 @@
+# Copy to .devcontainer/profile (gitignored) on each machine.
+#
+#   cp .devcontainer/profile.example .devcontainer/profile
+#
+# Values:
+#   local   — devcontainer on your laptop (1Password app integration)
+#   remote  — devcontainer on the Coolify host (service account token)
+#
+# If this file is missing, resolve-profile.sh auto-detects:
+#   ubuntu-24 / ubuntu-server → remote
+#   ~/.1password/agent.sock present → local
+#
+local

@@ -2,6 +2,11 @@
 # Start Tailscale and optionally configure remote Docker context.
 set -euo pipefail
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib/load-profile.sh
+source "${REPO_ROOT}/.devcontainer/scripts/lib/load-profile.sh"
+load_devcontainer_profile "${REPO_ROOT}" || true
+
 export PATH="${HOME}/.local/bin:${PATH}"
 TS_SOCKET="${TS_SOCKET:-/var/run/tailscale/tailscaled.sock}"
 TS_STATE="${TS_STATE:-/var/lib/tailscale/tailscaled.state}"

@@ -1,0 +1,6 @@
+# Remote devcontainer defaults — running on the Coolify host itself.
+# Override in ~/.dotfiles/dot_env/.env (gitignored).
+
+unset COOLIFY_DOCKER_HOST 2>/dev/null || true
+export DOZZLE_HOST="${DOZZLE_HOST:-127.0.0.1}"
+export DOZZLE_PORT="${DOZZLE_PORT:-8888}"

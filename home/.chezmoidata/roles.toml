@@ -29,6 +29,25 @@
 "lazygit" = "latest"
 
 [tools.devops]
+"kubectl" = "latest"
+"helm" = "latest"
+"k9s" = "latest"
+"terraform" = "latest"
+"lazydocker" = "latest"
+
+[tools.local]
+"kubectl" = "latest"
+"helm" = "latest"
+"k9s" = "latest"
+"terraform" = "latest"
+"lazydocker" = "latest"
+
+[tools.remote]
+"kubectl" = "latest"
+"helm" = "latest"
+"k9s" = "latest"
+"terraform" = "latest"
+"lazydocker" = "latest"
 
 [tools.gui]
 # GUI-only tools go here (currently none).
@@ -67,9 +86,52 @@ list = [
 ]
 
 [packages.devops]
-# Devcontainers only get [packages.common]; role-specific provisioning
-# (docker etc.) is handled by the devcontainer image/features.
-list = []
+list = [
+  "jq",
+  "dnsutils",
+  "netcat-openbsd",
+  "openssl",
+  "iputils-ping",
+  "iproute2",
+  "mtr-tiny",
+  "bind9-host",
+  "tcpdump",
+  "wget",
+  "openssh-client",
+  "httpie",
+]
+
+[packages.local]
+list = [
+  "jq",
+  "dnsutils",
+  "netcat-openbsd",
+  "openssl",
+  "iputils-ping",
+  "iproute2",
+  "mtr-tiny",
+  "bind9-host",
+  "tcpdump",
+  "wget",
+  "openssh-client",
+  "httpie",
+]
+
+[packages.remote]
+list = [
+  "jq",
+  "dnsutils",
+  "netcat-openbsd",
+  "openssl",
+  "iputils-ping",
+  "iproute2",
+  "mtr-tiny",
+  "bind9-host",
+  "tcpdump",
+  "wget",
+  "openssh-client",
+  "httpie",
+]
 
 [packages.gui]
 list = [
@@ -106,6 +168,8 @@ laptop = ["laptop/ssh", "laptop/server"]
 server = []
 vm     = []
 devops = ["devops/k8s", "devops/terraform"]
+local  = ["devops/k8s", "devops/terraform", "local/env"]
+remote = ["devops/k8s", "devops/terraform", "remote/env"]
 
 [servers]
 # Public servers (safe to commit). Private IPs and hostnames should be supplied

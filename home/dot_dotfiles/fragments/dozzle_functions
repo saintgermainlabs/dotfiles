@@ -1,0 +1,78 @@
+# Dozzle diagnostics — reach Dozzle on the Coolify host via Tailscale.
+# Requires: DOZZLE_HOST, DOZZLE_PORT (and optional DOZZLE_USER/DOZZLE_PASS).
+
+dozzle_url() {
+  local host="${DOZZLE_HOST:-ubuntu-24.tiger-bushmaster.ts.net}"
+  local port="${DOZZLE_PORT:-8888}"
+  echo "http://${host}:${port}"
+}
+
+_dozzle_curl() {
+  local path="$1"
+  local url
+  url="$(dozzle_url)${path}"
+  if [ -n "${DOZZLE_USER:-}" ]; then
+    curl -fsSL -u "${DOZZLE_USER}:${DOZZLE_PASS:-}" "$url"
+  else
+    curl -fsSL "$url"
+  fi
+}
+
+# List active containers from Dozzle
+dozzle_containers() {
+  _dozzle_curl "/api/containers" | jq -r '
+    if type == "array" then
+      .[] | "\(.name // .Id // "unknown")\t\(.State // .state // "?")\t\(.Status // .status // "")"
+    else
+      empty
+    end
+  ' 2>/dev/null || _dozzle_curl "/api/containers"
+}
+
+# Hardware stats per container
+dozzle_stats() {
+  _dozzle_curl "/api/stats" | jq '.' 2>/dev/null || _dozzle_curl "/api/stats"
+}
+
+# Find containers matching a pattern
+dozzle_find() {
+  local pattern="${1:-}"
+  [ -z "$pattern" ] && { echo "Usage: dozzle_find <pattern>" >&2; return 1; }
+  dozzle_containers 2>/dev/null | grep -i "$pattern" || {
+    echo "No containers matching '$pattern'" >&2
+    return 1
+  }
+}
+
+# Stream logs from a container (SSE)
+# Usage: dozzle_logs <container_id> [--tail N]
+dozzle_logs() {
+  local id="${1:-}"
+  local tail_lines="${2:-100}"
+  [ -z "$id" ] && { echo "Usage: dozzle_logs <container_id> [tail_lines]" >&2; return 1; }
+  if [ "$1" = "--tail" ]; then
+    tail_lines="${2:-100}"
+    id="${3:-}"
+    [ -z "$id" ] && { echo "Usage: dozzle_logs --tail N <container_id>" >&2; return 1; }
+  fi
+  local url
+  url="$(dozzle_url)/api/logs/stream?id=${id}"
+  if [ -n "${DOZZLE_USER:-}" ]; then
+    curl -fsSL -u "${DOZZLE_USER}:${DOZZLE_PASS:-}" "$url" | tail -n "$tail_lines"
+  else
+    curl -fsSL "$url" | tail -n "$tail_lines"
+  fi
+}
+
+# Quick Dozzle connectivity check
+dozzle_health() {
+  echo "=== Dozzle ==="
+  echo "URL: $(dozzle_url)"
+  if _dozzle_curl "/api/containers" >/dev/null 2>&1; then
+    echo "OK: reachable"
+    dozzle_containers | head -10
+    return 0
+  fi
+  echo "FAIL: cannot reach Dozzle at $(dozzle_url)" >&2
+  return 1
+}

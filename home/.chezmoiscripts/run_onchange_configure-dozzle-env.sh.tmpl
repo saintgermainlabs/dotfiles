@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Write Dozzle connection settings to ~/.dotfiles/dot_env/.env from 1Password or defaults.
+set -euo pipefail
+
+{{- if not .coolify_cli }}
+echo "coolify_cli not enabled on {{ .hostname }}; skipping Dozzle env setup."
+exit 0
+{{- else }}
+# Re-run when this script changes (bump DOZZLE_ENV_VERSION to force re-run).
+# DOZZLE_ENV_VERSION: 1
+
+ENV_FILE="${HOME}/.dotfiles/dot_env/.env"
+TMP_ENV="$(mktemp)"
+trap 'rm -f "$TMP_ENV"' EXIT
+
+_read_op() {
+  local ref="$1"
+  local fallback="${2:-}"
+  if command -v op >/dev/null 2>&1 && op whoami >/dev/null 2>&1; then
+    op read "$ref" 2>/dev/null || printf '%s' "$fallback"
+  else
+    printf '%s' "$fallback"
+  fi
+}
+
+DOZZLE_HOST="$(_read_op 'op://SG-Labs/Dozzle/hostname' 'ubuntu-24.tiger-bushmaster.ts.net')"
+DOZZLE_PORT="$(_read_op 'op://SG-Labs/Dozzle/port' '8888')"
+DOZZLE_USER="$(_read_op 'op://SG-Labs/Dozzle/username' '')"
+DOZZLE_PASS="$(_read_op 'op://SG-Labs/Dozzle/password' '')"
+
+mkdir -p "$(dirname "$ENV_FILE")"
+
+if [ -f "$ENV_FILE" ]; then
+  grep -v '^export DOZZLE_' "$ENV_FILE" > "$TMP_ENV" || true
+else
+  : > "$TMP_ENV"
+fi
+
+{
+  cat "$TMP_ENV"
+  printf 'export DOZZLE_HOST="%s"\n' "$DOZZLE_HOST"
+  printf 'export DOZZLE_PORT="%s"\n' "$DOZZLE_PORT"
+  printf 'export DOZZLE_USER="%s"\n' "$DOZZLE_USER"
+  printf 'export DOZZLE_PASS="%s"\n' "$DOZZLE_PASS"
+} > "${TMP_ENV}.new"
+
+if ! cmp -s "${TMP_ENV}.new" "$ENV_FILE" 2>/dev/null; then
+  mv "${TMP_ENV}.new" "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+  echo "Updated Dozzle settings in $ENV_FILE"
+else
+  echo "$ENV_FILE unchanged (Dozzle settings)"
+  rm -f "${TMP_ENV}.new"
+fi
+{{- end }}

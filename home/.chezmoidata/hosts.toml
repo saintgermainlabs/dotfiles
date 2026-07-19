@@ -17,3 +17,18 @@ tags = ["ephemeral"]
 role = "devops"
 gui  = false
 tags = ["dev", "container"]
+coolify_cli = true
+
+# Devcontainer on the laptop — remote Docker/Coolify/Dozzle via Tailscale + SSH.
+[hosts."devops-local01"]
+role = "local"
+gui  = false
+tags = ["dev", "container", "local"]
+coolify_cli = true
+
+# Devcontainer on the Coolify host — local Docker socket, Dozzle on localhost.
+[hosts."devops-remote01"]
+role = "remote"
+gui  = false
+tags = ["dev", "container", "remote"]
+coolify_cli = true

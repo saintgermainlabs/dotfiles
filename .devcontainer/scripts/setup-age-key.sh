@@ -3,6 +3,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/op-auth.sh
+source "${SCRIPT_DIR}/lib/op-auth.sh"
 
 AGE_DIR="${AGE_DIR:-${HOME}/.config/age}"
 AGE_KEY="${AGE_KEY:-${AGE_DIR}/key.txt}"
@@ -12,19 +14,7 @@ log() { printf '[setup-age-key] %s\n' "$*"; }
 die() { printf '[setup-age-key] ERROR: %s\n' "$*" >&2; exit 1; }
 
 ensure_age() {
-  if command -v age >/dev/null 2>&1; then
-    log "age already installed: $(age --version 2>/dev/null || echo unknown)"
-    return 0
-  fi
-
-  log "Installing age..."
-  if [ "$(id -u)" -eq 0 ]; then
-    apt-get update
-    apt-get install -y age
-  else
-    sudo apt-get update
-    sudo apt-get install -y age
-  fi
+  bash "${SCRIPT_DIR}/install-age.sh"
 }
 
 if [ -f "${AGE_KEY}" ]; then
@@ -38,7 +28,7 @@ if ! command -v op >/dev/null 2>&1; then
   bash "${SCRIPT_DIR}/install-op-cli.sh"
 fi
 
-if ! op whoami >/dev/null 2>&1; then
+if ! op_can_access_vault; then
   die "1Password is not authenticated; run authenticate-op.sh first."
 fi
 

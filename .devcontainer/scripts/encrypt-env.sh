@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Encrypt environment variables into an age-encrypted env.txt.age file.
+[ -n "${BASH_VERSION:-}" ] || exec bash "$0" "$@"
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

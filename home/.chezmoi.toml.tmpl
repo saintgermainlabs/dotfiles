@@ -8,7 +8,9 @@
 {{- $role := dig $hostname "role" (env "DOTFILES_ROLE" | default "server") $hostsFile.hosts -}}
 {{- $gui  := dig $hostname "gui"  false    $hostsFile.hosts -}}
 {{- $tags := dig $hostname "tags" list     $hostsFile.hosts -}}
-{{- $isDevops := eq $role "devops" -}}
+{{- $hostEntry := dig $hostname dict $hostsFile.hosts -}}
+{{- $coolifyCli := dig "coolify_cli" false $hostEntry -}}
+{{- $isDevcontainer := or (eq $role "devops") (eq $role "local") (eq $role "remote") -}}
 
 {{- /* Compute active modules */ -}}
 {{- $enabledModules := list -}}
@@ -38,13 +40,7 @@ encryption = "age"
     # Builtin age implementation — no external `age` binary required on any
     # host (the apt package was removed; devcontainers install no packages).
     useBuiltin = true
-{{- if $isDevops }}
-    # Devops role (devcontainer): ephemeral key fetched from 1Password via hooks.
-    # The key is written to /tmp before apply and deleted after — never persisted.
-    identity = "/tmp/chezmoi-age-key.txt"
-{{- else }}
     identity = "~/.config/age/key.txt"
-{{- end }}
     recipient = "age1m7qs8zz9r2c9qqflahclxd0z6gfpeq44pawv7vwzw03a93dk4usscnxazq"
 
 [data]
@@ -58,6 +54,8 @@ encryption = "age"
     module_enabled = {{ $enabledModules | toJson }}
     module_packages = {{ $_modulePackages | toJson }}
     module_scripts  = {{ $_moduleScripts | toJson }}
+    coolify_cli = {{ $coolifyCli }}
+    devcontainer = {{ $isDevcontainer }}
 
 [data.fragments]
 {{- range $name, $contexts := $mergedFragments }}
@@ -67,16 +65,4 @@ encryption = "age"
 [data.module_tools]
 {{- range $tool, $val := $_moduleTools }}
     {{ $tool | quote }} = {{ $val }}
-{{- end }}
-
-{{- if $isDevops }}
-# Ephemeral age key hooks — fetch from 1Password before apply, delete after.
-# Requires `op` CLI to be authenticated (app integration or OP_SERVICE_ACCOUNT_TOKEN).
-[hooks.read-source-state.pre]
-    command = "bash"
-    args = ["-c", "op read 'op://Security Keys/chezmoi age key/key.txt' > /tmp/chezmoi-age-key.txt && chmod 600 /tmp/chezmoi-age-key.txt"]
-
-[hooks.apply.post]
-    command = "rm"
-    args = ["-f", "/tmp/chezmoi-age-key.txt"]
 {{- end }}

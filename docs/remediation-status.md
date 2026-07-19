@@ -167,6 +167,36 @@ mounted socket) for the ephemeral-key hooks; that requirement is unchanged.
 Verified: config renders correctly for the devops role
 (`DOTFILES_ROLE=devops`) with builtin age + ephemeral `/tmp` key + hooks.
 
+### 2026-07-12 — Project devcontainer added
+
+Added a repo-local devcontainer so the dotfiles project can be opened in an
+Ubuntu-based development environment.
+
+Files added:
+
+- **`.devcontainer/Dockerfile`**: based on `ubuntu:24.04`; installs `python3`,
+  `python3-pip`, `python3-venv`, `git`, `curl`, `sudo`, and `uv` into
+  `/usr/local/bin`; creates a passwordless-sudo `vscode` user.
+- **`.devcontainer/devcontainer.json`**: builds the Dockerfile, uses
+  `remoteUser = "vscode"`, and sets `DOTFILES_ROLE=devops` plus
+  `DOTFILES_HOSTNAME=devops-dev01` so chezmoi uses the devcontainer host data.
+
+The devcontainer does **not** install Docker. It is intentionally based on a
+plain Ubuntu image with Python 3 and `uv` only; any Docker access should be
+added later via explicit devcontainer features if needed.
+
+### 2026-07-12 — Aider installed in devcontainer with uv
+
+Added `aider-chat@latest` to `.devcontainer/Dockerfile` using Aider's documented
+uv-based install command:
+
+```bash
+uv tool install --force --python python3.12 --with pip aider-chat@latest
+```
+
+The install is run with `UV_TOOL_BIN_DIR=/usr/local/bin` so the `aider`
+executable is available on `PATH` for the `vscode` user.
+
 ---
 
 ## Notable gotchas discovered along the way

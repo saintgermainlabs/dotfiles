@@ -41,21 +41,30 @@ setup() {
 }
 
 @test "[templates] .chezmoi.toml.tmpl falls back to DOTFILES_ROLE env var for unknown host" {
-    run bash -c "DOTFILES_HOSTNAME=dev-container DOTFILES_ROLE=devops $CHEZMOI execute-template --init < '$REPO_ROOT/home/.chezmoi.toml.tmpl'"
+    run bash -c "DOTFILES_HOSTNAME=dev-container DOTFILES_ROLE=local $CHEZMOI execute-template --init < '$REPO_ROOT/home/.chezmoi.toml.tmpl'"
     [ "$status" -eq 0 ]
-    echo "$output" | grep 'role = "devops"'
+    echo "$output" | grep 'role = "local"'
+    echo "$output" | grep 'devcontainer = true'
     echo "$output" | grep 'gui  = false'
 }
 
-@test "[templates] devops role uses ephemeral age key" {
-    run bash -c "DOTFILES_HOSTNAME=dev-container DOTFILES_ROLE=devops $CHEZMOI execute-template --init < '$REPO_ROOT/home/.chezmoi.toml.tmpl'"
+@test "[templates] devcontainer roles use persistent age key" {
+    run bash -c "DOTFILES_HOSTNAME=dev-container DOTFILES_ROLE=local $CHEZMOI execute-template --init < '$REPO_ROOT/home/.chezmoi.toml.tmpl'"
     [ "$status" -eq 0 ]
-    echo "$output" | grep 'identity = "/tmp/chezmoi-age-key.txt"'
-    echo "$output" | grep '\[hooks.read-source-state.pre\]'
-    echo "$output" | grep '\[hooks.apply.post\]'
+    echo "$output" | grep 'identity = "~/.config/age/key.txt"'
+    ! echo "$output" | grep '\[hooks.read-source-state.pre\]'
+    ! echo "$output" | grep '\[hooks.apply.post\]'
 }
 
-@test "[templates] non-devops role uses persistent age key" {
+@test "[templates] remote devcontainer role uses persistent age key" {
+    run bash -c "DOTFILES_HOSTNAME=dev-container DOTFILES_ROLE=remote $CHEZMOI execute-template --init < '$REPO_ROOT/home/.chezmoi.toml.tmpl'"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep 'role = "remote"'
+    echo "$output" | grep 'devcontainer = true'
+    echo "$output" | grep 'identity = "~/.config/age/key.txt"'
+}
+
+@test "[templates] non-devcontainer role uses persistent age key" {
     run bash -c "DOTFILES_HOSTNAME=ubuntu-laptop $CHEZMOI execute-template --init < '$REPO_ROOT/home/.chezmoi.toml.tmpl'"
     [ "$status" -eq 0 ]
     echo "$output" | grep 'identity = "~/.config/age/key.txt"'
@@ -71,6 +80,31 @@ setup() {
     [ -n "$enc_line" ]
     [ -n "$data_line" ]
     [ "$enc_line" -lt "$data_line" ]
+}
+
+@test "[templates] .chezmoi.toml.tmpl renders for devops-dev01 (legacy)" {
+    run bash -c "DOTFILES_HOSTNAME=devops-dev01 $CHEZMOI execute-template --init < '$REPO_ROOT/home/.chezmoi.toml.tmpl'"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep 'role = "devops"'
+    echo "$output" | grep 'devcontainer = true'
+    echo "$output" | grep 'coolify_cli = true'
+    echo "$output" | grep 'identity = "~/.config/age/key.txt"'
+}
+
+@test "[templates] .chezmoi.toml.tmpl renders for devops-local01" {
+    run bash -c "DOTFILES_HOSTNAME=devops-local01 $CHEZMOI execute-template --init < '$REPO_ROOT/home/.chezmoi.toml.tmpl'"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep 'role = "local"'
+    echo "$output" | grep 'devcontainer = true'
+    echo "$output" | grep 'coolify_cli = true'
+}
+
+@test "[templates] .chezmoi.toml.tmpl renders for devops-remote01" {
+    run bash -c "DOTFILES_HOSTNAME=devops-remote01 $CHEZMOI execute-template --init < '$REPO_ROOT/home/.chezmoi.toml.tmpl'"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep 'role = "remote"'
+    echo "$output" | grep 'devcontainer = true'
+    echo "$output" | grep 'coolify_cli = true'
 }
 
 @test "[templates] .chezmoiignore.tmpl renders for laptop (gui=true)" {
@@ -94,4 +128,6 @@ setup() {
     [ "$status" -eq 0 ]
     echo "$output" | grep '\.local/bin/server/'
     echo "$output" | grep '\.local/bin/vm/'
+    echo "$output" | grep '\.local/bin/local/'
+    echo "$output" | grep '\.local/bin/remote/'
 }

@@ -12,7 +12,7 @@
 [modules."remote-coolify-manager"]
 name = "remote-coolify-manager"
 description = "CLI tools and shell helpers for remotely managing Coolify servers via the Coolify API and Tailscale mesh"
-contexts = ["server", "laptop", "devops"]
+contexts = ["server", "laptop", "devops", "local", "remote"]
 # mise-managed tools needed by this module
 tools = ["go"]
 # apt packages needed by this module
@@ -20,7 +20,10 @@ packages = ["tailscale"]
 # shell fragment files to load
 fragments = ["remote-coolify-manage"]
 # custom install scripts (relative to .chezmoiscripts/)
-scripts = ["run_once_after_20-install-coolify-cli.sh.tmpl"]
+scripts = [
+  "run_once_before_15-install-tailscale-repo.sh.tmpl",
+  "run_once_after_20-install-coolify-cli.sh.tmpl",
+]
 
 # Add more modules below as needed
 # [modules."k8s-admin"]

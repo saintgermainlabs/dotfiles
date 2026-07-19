@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Configure Coolify CLI context from 1Password (never hardcode tokens).
+set -euo pipefail
+
+{{- if not .coolify_cli }}
+echo "coolify_cli not enabled on {{ .hostname }}; skipping Coolify context setup."
+exit 0
+{{- else }}
+# Re-run when this script changes (bump COOLIFY_CTX_VERSION to force re-run).
+# COOLIFY_CTX_VERSION: 1
+
+COOLIFY_URL="${COOLIFY_URL:-https://coolify.tiger-bushmaster.ts.net}"
+COOLIFY_CONTEXT="${COOLIFY_CONTEXT:-homelab}"
+OP_TOKEN_REF="${COOLIFY_TOKEN_REF:-op://SG-Labs/Coolify API/token}"
+
+if ! command -v coolify >/dev/null 2>&1; then
+  echo "coolify CLI not found; skipping context setup." >&2
+  exit 0
+fi
+
+if ! command -v op >/dev/null 2>&1 || ! op whoami >/dev/null 2>&1; then
+  echo "1Password not authenticated; skipping Coolify context setup." >&2
+  exit 0
+fi
+
+COOLIFY_TOKEN="$(op read "${OP_TOKEN_REF}" 2>/dev/null || true)"
+if [ -z "${COOLIFY_TOKEN}" ]; then
+  echo "Could not read Coolify token from ${OP_TOKEN_REF}; skipping." >&2
+  exit 0
+fi
+
+if coolify context list 2>/dev/null | grep -q "^${COOLIFY_CONTEXT}"; then
+  coolify context token "${COOLIFY_CONTEXT}" "${COOLIFY_TOKEN}"
+else
+  coolify context add "${COOLIFY_CONTEXT}" "${COOLIFY_URL}" "${COOLIFY_TOKEN}"
+fi
+
+coolify context use "${COOLIFY_CONTEXT}"
+echo "Coolify context '${COOLIFY_CONTEXT}' configured for ${COOLIFY_URL}"
+{{- end }}

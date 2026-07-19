@@ -197,3 +197,42 @@ printf "%-30s %-20s %-50s\n" "$resource" "$service" "$c"
 done
 }
 
+# ── Remote Docker context (SSH via Tailscale) ──────────────────────
+
+# Create or switch to an SSH-backed Docker context for a Coolify host.
+# Usage: docker_remote_use [user@]hostname [context-name]
+docker_remote_use() {
+  local target="${1:-}"
+  local ctx_name="${2:-coolify-remote}"
+  [ -z "$target" ] && { echo "Usage: docker_remote_use [user@]hostname [context-name]" >&2; return 1; }
+
+  case "$target" in
+    *@*) ;;
+    *) target="root@${target}" ;;
+  esac
+
+  local docker_host="ssh://${target}"
+  if docker context inspect "$ctx_name" >/dev/null 2>&1; then
+    docker context update "$ctx_name" --docker "host=${docker_host}" 2>/dev/null \
+      || docker context rm "$ctx_name" && docker context create "$ctx_name" --docker "host=${docker_host}"
+  else
+    docker context create "$ctx_name" --docker "host=${docker_host}"
+  fi
+  docker context use "$ctx_name"
+  echo "Using Docker context '${ctx_name}' -> ${docker_host}"
+}
+
+docker_remote_ps() {
+  docker ps "$@"
+}
+
+docker_remote_logs() {
+  local container="${1:-}"
+  [ -z "$container" ] && { echo "Usage: docker_remote_logs <container>" >&2; return 1; }
+  docker logs --tail=100 -f "$container"
+}
+
+docker_remote_stats() {
+  docker stats "$@"
+}
+

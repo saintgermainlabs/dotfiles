@@ -230,3 +230,114 @@ coolify_diag() {
   echo "=== Coolify Hosts (via Tailscale tags) ==="
   coolify_hosts 2>/dev/null || echo "No tagged hosts found" >&2
 }
+
+# ── Health and API debugging ─────────────────────────────────────────
+
+# Resolve Coolify API base URL and token from CLI config
+_coolify_api_config() {
+  local config="${HOME}/.config/coolify/config.json"
+  if [ ! -f "$config" ]; then
+    echo "coolify: no config at $config" >&2
+    return 1
+  fi
+  python3 -c "
+import json, sys
+with open('$config') as f:
+    cfg = json.load(f)
+ctx = cfg.get('current-context') or cfg.get('current_context', '')
+contexts = cfg.get('contexts', {})
+if ctx not in contexts:
+    sys.exit(1)
+c = contexts[ctx]
+print(c.get('fqdn', c.get('url', '')).rstrip('/'))
+print(c.get('token', ''))
+" 2>/dev/null
+}
+
+# Verify Coolify connectivity and list servers
+coolify_health() {
+  local failed=0
+  echo "=== Coolify Health ==="
+  if ! command -v coolify &>/dev/null; then
+    echo "FAIL: coolify CLI not installed" >&2
+    return 1
+  fi
+  if ! coolify context verify 2>/dev/null; then
+    echo "FAIL: coolify context verify" >&2
+    failed=1
+  else
+    echo "OK: context verified"
+  fi
+  if coolify servers list 2>/dev/null | head -5; then
+    echo "OK: server list"
+  else
+    echo "WARN: server list failed" >&2
+    failed=1
+  fi
+  return "$failed"
+}
+
+# Authenticated GET against Coolify API v1
+coolify_curl() {
+  local path="${1:-}"
+  [ -z "$path" ] && { echo "Usage: coolify_curl <api-path>" >&2; return 1; }
+  path="${path#/}"
+  local cfg fqdn token
+  cfg=$(_coolify_api_config) || return 1
+  fqdn=$(echo "$cfg" | sed -n '1p')
+  token=$(echo "$cfg" | sed -n '2p')
+  curl -fsSL -H "Authorization: Bearer ${token}" -H "Accept: application/json" \
+    "${fqdn}/api/v1/${path}"
+}
+
+# Same as coolify_curl but via httpie for readable output
+coolify_api() {
+  local path="${1:-}"
+  [ -z "$path" ] && { echo "Usage: coolify_api <api-path>" >&2; return 1; }
+  path="${path#/}"
+  if ! command -v http >/dev/null 2>&1; then
+    echo "httpie not installed; falling back to coolify_curl" >&2
+    coolify_curl "$path"
+    return $?
+  fi
+  local cfg fqdn token
+  cfg=$(_coolify_api_config) || return 1
+  fqdn=$(echo "$cfg" | sed -n '1p')
+  token=$(echo "$cfg" | sed -n '2p')
+  http GET "${fqdn}/api/v1/${path}" "Authorization:Bearer ${token}" Accept:application/json
+}
+
+# Tail logs for an app by name or UUID
+coolify_app_logs() {
+  local name="${1:-}"
+  [ -z "$name" ] && { echo "Usage: coolify_app_logs <app-name-or-uuid>" >&2; return 1; }
+  if coolify app logs "$name" 2>/dev/null; then
+    return 0
+  fi
+  coolify application logs "$name" 2>/dev/null || {
+    echo "Could not fetch logs for '$name'" >&2
+    return 1
+  }
+}
+
+# Check SSL certificate expiry for a URL
+coolify_ssl_check() {
+  local url="${1:-}"
+  [ -z "$url" ] && { echo "Usage: coolify_ssl_check <https-url>" >&2; return 1; }
+  local host port
+  host=$(echo "$url" | sed -E 's|https?://([^/:]+).*|\1|')
+  port=$(echo "$url" | sed -E 's|.*:([0-9]+).*|\1|')
+  [ "$port" = "$url" ] && port=443
+  echo | openssl s_client -connect "${host}:${port}" -servername "$host" 2>/dev/null \
+    | openssl x509 -noout -subject -dates 2>/dev/null \
+    || { echo "SSL check failed for $url" >&2; return 1; }
+}
+
+# Poll deployment status for a resource UUID
+coolify_deploy_status() {
+  local uuid="${1:-}"
+  [ -z "$uuid" ] && { echo "Usage: coolify_deploy_status <resource-uuid>" >&2; return 1; }
+  coolify_curl "deployments?uuid=${uuid}" 2>/dev/null | jq '.' 2>/dev/null \
+    || coolify_curl "deployments" 2>/dev/null | jq ".[] | select(.uuid==\"${uuid}\")" 2>/dev/null \
+    || { echo "Could not fetch deployment status for ${uuid}" >&2; return 1; }
+}

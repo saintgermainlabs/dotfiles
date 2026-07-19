@@ -1,6 +1,6 @@
 # Optional shell fragments configuration
 # Fragments are loaded from dot_dotfiles/fragments/
-# Valid contexts: "laptop", "server", "vm", "gui"
+# Valid contexts: "laptop", "server", "vm", "devops", "local", "remote", "gui"
 # "gui" is a machine attribute, not a role — it combines with any role.
 #
 # NOTE: Fragments declared by active modules in modules.toml are
@@ -8,13 +8,12 @@
 
 [fragments]
 # Fragments are shell-agnostic and can be loaded in both bash and zsh
-ssh_functions = ["laptop", "server", "vm", "devops"]
-docker_functions = ["laptop", "server", "devops"]
-tailscale_functions = ["laptop", "server", "vm", "devops"]
+ssh_functions = ["laptop", "server", "vm", "devops", "local", "remote"]
+docker_functions = ["laptop", "server", "devops", "local", "remote"]
+tailscale_functions = ["laptop", "server", "vm", "devops", "local", "remote"]
 multimedia_functions = ["laptop", "gui"]
-docs_functions = ["laptop", "server", "vm", "devops"]
-
-# Add more fragments here as needed
+docs_functions = ["laptop", "server", "vm", "devops", "local", "remote"]
+dozzle_functions = ["devops", "local", "remote", "laptop"]
 # terraform_functions = ["laptop"]
 # k8s_functions = ["server"]
 # zsh_completions = ["gui"]
