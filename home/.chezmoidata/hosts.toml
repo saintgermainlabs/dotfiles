@@ -8,6 +8,13 @@ role = "server"
 gui  = false
 tags = ["homelab", "coolify-host"]
 
+# Linux hostname on the Coolify VPS (case differs from ubuntu-24).
+[hosts."Ubuntu-24"]
+role = "server"
+gui  = false
+tags = ["homelab", "coolify-host"]
+coolify_cli = true
+
 [hosts."vm-dev01"]
 role = "vm"
 gui  = false
