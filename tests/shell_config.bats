@@ -99,3 +99,54 @@ setup() {
     echo "$output" | grep 'common/functions'
     echo "$output" | grep 'zsh/init'
 }
+
+@test "[shell] bashrc sources help_functions after role-aliases" {
+    grep -q 'role-aliases' "$REPO_ROOT/home/dot_bashrc.tmpl"
+    grep -q 'fragments/help_functions' "$REPO_ROOT/home/dot_bashrc.tmpl"
+    # help_functions must be sourced after role-aliases
+    awk '/role-aliases/{ra=NR} /help_functions/{hf=NR} END{exit !(ra && hf && hf>ra)}' \
+        "$REPO_ROOT/home/dot_bashrc.tmpl"
+}
+
+@test "[shell] zshrc sources help_functions after role-aliases" {
+    grep -q 'role-aliases' "$REPO_ROOT/home/dot_zshrc.tmpl"
+    grep -q 'fragments/help_functions' "$REPO_ROOT/home/dot_zshrc.tmpl"
+    awk '/role-aliases/{ra=NR} /help_functions/{hf=NR} END{exit !(ra && hf && hf>ra)}' \
+        "$REPO_ROOT/home/dot_zshrc.tmpl"
+}
+
+@test "[shell] help_functions defines manual and aliases" {
+    run bash -n "$REPO_ROOT/home/dot_dotfiles/fragments/help_functions"
+    [ "$status" -eq 0 ]
+    grep -q '^manual()' "$REPO_ROOT/home/dot_dotfiles/fragments/help_functions"
+    grep -q '^aliases()' "$REPO_ROOT/home/dot_dotfiles/fragments/help_functions"
+}
+
+@test "[shell] manual() shows comment descriptions for functions" {
+    local tmp_home
+    tmp_home="$(mktemp -d)"
+    mkdir -p "$tmp_home/.dotfiles/fragments" "$tmp_home/.config/dotfiles"
+    cp -r "$REPO_ROOT/home/dot_dotfiles/common" "$tmp_home/.dotfiles/"
+    cp "$REPO_ROOT/home/dot_dotfiles/fragments/docker_functions" "$tmp_home/.dotfiles/fragments/"
+    cp "$REPO_ROOT/home/dot_dotfiles/fragments/help_functions" "$tmp_home/.dotfiles/fragments/"
+    echo '# test' > "$tmp_home/.config/dotfiles/role-aliases"
+
+    run bash -c "export HOME='$tmp_home'; source '$tmp_home/.dotfiles/fragments/help_functions'; manual cps"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -F 'List running containers'
+    rm -rf "$tmp_home"
+}
+
+@test "[shell] aliases() shows comment descriptions" {
+    local tmp_home
+    tmp_home="$(mktemp -d)"
+    mkdir -p "$tmp_home/.dotfiles/fragments" "$tmp_home/.config/dotfiles"
+    cp -r "$REPO_ROOT/home/dot_dotfiles/common" "$tmp_home/.dotfiles/"
+    cp "$REPO_ROOT/home/dot_dotfiles/fragments/help_functions" "$tmp_home/.dotfiles/fragments/"
+    echo '# test' > "$tmp_home/.config/dotfiles/role-aliases"
+
+    run bash -c "export HOME='$tmp_home'; source '$tmp_home/.dotfiles/fragments/help_functions'; aliases ll"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -F 'Long listing with git status'
+    rm -rf "$tmp_home"
+}

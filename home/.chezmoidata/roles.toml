@@ -28,21 +28,7 @@
 [tools.vm]
 "lazygit" = "latest"
 
-[tools.devops]
-"kubectl" = "latest"
-"helm" = "latest"
-"k9s" = "latest"
-"terraform" = "latest"
-"lazydocker" = "latest"
-
-[tools.local]
-"kubectl" = "latest"
-"helm" = "latest"
-"k9s" = "latest"
-"terraform" = "latest"
-"lazydocker" = "latest"
-
-[tools.remote]
+[tools.container]
 "kubectl" = "latest"
 "helm" = "latest"
 "k9s" = "latest"
@@ -85,39 +71,7 @@ list = [
   "rsync",
 ]
 
-[packages.devops]
-list = [
-  "jq",
-  "dnsutils",
-  "netcat-openbsd",
-  "openssl",
-  "iputils-ping",
-  "iproute2",
-  "mtr-tiny",
-  "bind9-host",
-  "tcpdump",
-  "wget",
-  "openssh-client",
-  "httpie",
-]
-
-[packages.local]
-list = [
-  "jq",
-  "dnsutils",
-  "netcat-openbsd",
-  "openssl",
-  "iputils-ping",
-  "iproute2",
-  "mtr-tiny",
-  "bind9-host",
-  "tcpdump",
-  "wget",
-  "openssh-client",
-  "httpie",
-]
-
-[packages.remote]
+[packages.container]
 list = [
   "jq",
   "dnsutils",
@@ -155,7 +109,7 @@ common = [
 
 [bootstrap.shells]
 bash = ["bash/init"]
-zsh  = ["zsh/shell", "zsh/rc", "zsh/init"]
+zsh  = ["zsh/rc", "zsh/init"]
 
 # Late shell integrations — sourced at the very end of .bashrc / .zshrc.
 # Tools that must be initialized last (e.g. zoxide) go here.
@@ -167,9 +121,9 @@ zsh  = ["zsh/late-init"]
 laptop = ["laptop/ssh", "laptop/server"]
 server = []
 vm     = []
-devops = ["devops/k8s", "devops/terraform"]
-local  = ["devops/k8s", "devops/terraform", "local/env"]
-remote = ["devops/k8s", "devops/terraform", "remote/env"]
+devops = ["container/k8s", "container/terraform"]
+local  = ["container/k8s", "container/terraform", "local/env"]
+remote = ["container/k8s", "container/terraform", "remote/env"]
 
 [servers]
 # Public servers (safe to commit). Private IPs and hostnames should be supplied

@@ -1,74 +1,163 @@
-# Help functions — provides a manual page for all functions and aliases.
-# This fragment is loaded last so it can see all aliases and functions
-# defined by every other module and fragment.
+# Help functions — manual page for dotfiles shell commands.
+# Loaded after bootstrap, fragments, and role-aliases.
+
+MANUAL_LAST_COUNT=0
+
+_manual_files() {
+  local shell_dir="$HOME/.dotfiles"
+  local -a files=()
+  local seen="|"
+
+  _manual_add() {
+    local f="$1"
+    [ -f "$f" ] || return 0
+    case "$seen" in *"|${f}|"*) return 0 ;; esac
+    seen="${seen}${f}|"
+    files+=("$f")
+  }
+
+  _manual_add "${shell_dir}/common/aliases"
+  _manual_add "${shell_dir}/common/functions"
+  _manual_add "${shell_dir}/laptop/ssh"
+  _manual_add "${shell_dir}/laptop/server"
+  _manual_add "${shell_dir}/container/k8s"
+  _manual_add "${shell_dir}/container/terraform"
+
+  local frag
+  for frag in "${shell_dir}"/fragments/*; do
+    [ -f "$frag" ] || continue
+    [ "$(basename "$frag")" = "help_functions" ] && continue
+    _manual_add "$frag"
+  done
+
+  _manual_add "${HOME}/.config/dotfiles/role-aliases"
+
+  printf '%s\n' "${files[@]}"
+}
+
+_manual_init_colors() {
+  if [ -t 1 ]; then
+    MANUAL_TITLE=$'\033[1;35m'
+    MANUAL_NAME=$'\033[1;33m'
+    MANUAL_ARROW=$'\033[2;37m'
+    MANUAL_DIM=$'\033[2m'
+    MANUAL_RESET=$'\033[0m'
+  else
+    MANUAL_TITLE="" MANUAL_NAME="" MANUAL_ARROW="" MANUAL_DIM="" MANUAL_RESET=""
+  fi
+}
+
+_manual_is_internal() {
+  local block="$1"
+  grep -q '@internal' <<<"$block"
+}
+
+_manual_summary() {
+  local block="$1"
+  local line desc=""
+  while IFS= read -r line; do
+    line="${line#\# }"
+    line="${line#\#}"
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*$ ]] && continue
+    [[ "$line" == @internal* ]] && continue
+    [[ "$line" =~ ^(Usage|Examples?|Example|Requires): ]] && continue
+    [[ "$line" =~ ^─+$ ]] && continue
+    [[ "$line" =~ ^──.*── ]] && continue
+    [[ "$line" =~ ─{3,} ]] && continue
+    desc="$line"
+  done <<<"$block"
+  [ -n "$desc" ] && printf '%s' "$desc"
+  [ -n "$desc" ]
+}
+
+_manual_scan_file() {
+  local file="$1"
+  local pattern="${2:-}"
+  local mode="${3:-all}"
+  local show_internal="${MANUAL_ALL:-0}"
+
+  local rel="${file#${HOME}/.dotfiles/}"
+  rel="${rel#${HOME}/.config/dotfiles/}"
+  [ "$rel" = "$file" ] && rel="${file##*/}"
+
+  local comment_block="" file_header_shown=0 count=0
+  local line nm body desc internal
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [[ "$line" =~ ^[[:space:]]*# ]]; then
+      comment_block+="${line}"$'\n'
+      continue
+    fi
+
+    if [[ "$line" =~ ^[[:space:]]*alias[[:space:]]+([^=[:space:]]+)=(.*)$ ]]; then
+      [ "$mode" = "functions" ] && { comment_block=""; continue; }
+      nm="${BASH_REMATCH[1]}"
+      body="${BASH_REMATCH[2]}"
+      body="${body#[\"\']}"; body="${body%[\"\']}"
+      internal=0
+      _manual_is_internal "$comment_block" && internal=1
+      desc="$(_manual_summary "$comment_block" 2>/dev/null || true)"
+      comment_block=""
+      if [ "$internal" -eq 1 ] && [ "$show_internal" != "1" ]; then continue; fi
+      if [ -n "$pattern" ] && ! grep -qi -- "$pattern" <<<"$nm $body $desc"; then continue; fi
+      if [ "$file_header_shown" -eq 0 ]; then
+        printf "\n${MANUAL_TITLE}══ %s ══${MANUAL_RESET}\n" "$rel"
+        file_header_shown=1
+      fi
+      if [ -n "$desc" ]; then
+        printf "  ${MANUAL_NAME}%-22s${MANUAL_RESET} %s\n" "$nm" "$desc"
+        printf "  ${MANUAL_DIM}%-22s  → %s${MANUAL_RESET}\n" "" "$body"
+      else
+        printf "  ${MANUAL_NAME}%-22s${MANUAL_ARROW} → ${MANUAL_RESET}%s\n" "$nm" "$body"
+      fi
+      ((count++))
+      continue
+    fi
+
+    if [[ "$line" =~ ^[[:space:]]*function[[:space:]]+([a-zA-Z_][a-zA-Z0-9_]*) ]] \
+       || [[ "$line" =~ ^[[:space:]]*([a-zA-Z_][a-zA-Z0-9_]*)[[:space:]]*\(\)[[:space:]]*\{? ]]; then
+      [ "$mode" = "aliases" ] && { comment_block=""; continue; }
+      nm="${BASH_REMATCH[1]}"
+      [[ "$nm" =~ ^_ ]] && [ "$show_internal" != "1" ] && { comment_block=""; continue; }
+      internal=0
+      _manual_is_internal "$comment_block" && internal=1
+      desc="$(_manual_summary "$comment_block" 2>/dev/null || true)"
+      comment_block=""
+      if [ "$internal" -eq 1 ] && [ "$show_internal" != "1" ]; then continue; fi
+      if [ -n "$pattern" ] && ! grep -qi -- "$pattern" <<<"$nm $desc"; then continue; fi
+      if [ "$file_header_shown" -eq 0 ]; then
+        printf "\n${MANUAL_TITLE}══ %s ══${MANUAL_RESET}\n" "$rel"
+        file_header_shown=1
+      fi
+      if [ -n "$desc" ]; then
+        printf "  ${MANUAL_NAME}%-22s${MANUAL_RESET} %s\n" "${nm}()" "$desc"
+      else
+        printf "  ${MANUAL_NAME}%-22s${MANUAL_RESET}\n" "${nm}()"
+      fi
+      ((count++))
+      continue
+    fi
+
+    [[ -z "${line//[[:space:]]/}" ]] || comment_block=""
+  done < "$file"
+
+  MANUAL_LAST_COUNT=$count
+}
 
 # Print a manual of aliases and functions from dotfiles shell modules.
+# Usage: manual [pattern]
+#        MANUAL_ALL=1 manual  — include @internal and _prefixed helpers
 manual() {
-  local pattern="$1"
-  local shell_dir="$HOME/.dotfiles"
-  local files=(
-    "$shell_dir/common/aliases"
-    "$shell_dir/common/functions"
-    "$shell_dir/common/prompt"
-    "$shell_dir/bash/init"
-    "$shell_dir/bash/late-init"
-    "$shell_dir/zsh/init"
-    "$shell_dir/zsh/late-init"
-    "$shell_dir/laptop/ssh"
-    "$shell_dir/laptop/server"
-    "$shell_dir/devops/k8s"
-    "$shell_dir/devops/terraform"
-  )
+  local pattern="${1:-}"
+  local file total=0
 
-  # Also scan all loaded fragments.
-  local frag
-  for frag in "$shell_dir"/fragments/*; do
-    [ -f "$frag" ] && files+=("$frag")
-  done
+  _manual_init_colors
 
-  local title name arrow reset
-  if [ -t 1 ]; then
-    title=$'\033[1;35m'
-    name=$'\033[1;33m'
-    arrow=$'\033[2;37m'
-    reset=$'\033[0m'
-  fi
-
-  local total=0
-  local file
-  for file in "${files[@]}"; do
-    [ -f "$file" ] || continue
-    local rel="${file#$shell_dir/}"
-    local file_header_shown=0
-
-    while IFS= read -r line || [ -n "$line" ]; do
-      if [[ "$line" =~ ^alias[[:space:]]+([^=]+)=(.*)$ ]]; then
-        local nm="${BASH_REMATCH[1]}"
-        local body="${BASH_REMATCH[2]}"
-        body="${body#[\"\']}"; body="${body%[\"\']}"
-        if [ -n "$pattern" ] && ! grep -qi -- "$pattern" <<<"$nm $body"; then
-          continue
-        fi
-        if [ "$file_header_shown" -eq 0 ]; then
-          printf "\n${title}══ %s ══${reset}\n" "$rel"
-          file_header_shown=1
-        fi
-        printf "  ${name}%-26s${arrow} → ${reset}%s\n" "$nm" "$body"
-        ((total++))
-      elif [[ "$line" =~ ^([a-zA-Z_][a-zA-Z0-9_-]*)[[:space:]]*\(\) ]] || [[ "$line" =~ ^function[[:space:]]+([a-zA-Z_][a-zA-Z0-9_-]*) ]]; then
-        local nm="${BASH_REMATCH[1]}"
-        if [ -n "$pattern" ] && ! grep -qi -- "$pattern" <<<"$nm"; then
-          continue
-        fi
-        if [ "$file_header_shown" -eq 0 ]; then
-          printf "\n${title}══ %s ══${reset}\n" "$rel"
-          file_header_shown=1
-        fi
-        printf "  ${name}%-26s${reset}\n" "$nm()"
-        ((total++))
-      fi
-    done < "$file"
-  done
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    _manual_scan_file "$file" "$pattern" all
+    total=$((total + MANUAL_LAST_COUNT))
+  done < <(_manual_files)
 
   if [ -n "$pattern" ] && [ "$total" -eq 0 ]; then
     echo "manual: no matches for: $pattern" >&2
@@ -77,53 +166,22 @@ manual() {
   echo
 }
 
-# List aliases from the common aliases file.
+# List aliases with descriptions from all dotfiles alias sources.
+# Usage: aliases [pattern]
 aliases() {
-  local pattern="$1"
-  local file="$HOME/.dotfiles/common/aliases"
+  local pattern="${1:-}"
+  local file total=0
 
-  if [ ! -f "$file" ]; then
-    echo "aliases: $file not found" >&2
-    return 1
-  fi
+  _manual_init_colors
 
-  local hdr name arrow reset
-  if [ -t 1 ]; then
-    hdr=$'\033[1;36m'; name=$'\033[1;33m'; arrow=$'\033[2;37m'; reset=$'\033[0m'
-  fi
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    _manual_scan_file "$file" "$pattern" aliases
+    total=$((total + MANUAL_LAST_COUNT))
+  done < <(_manual_files)
 
-  local section="" section_shown=0 count=0
-
-  while IFS= read -r line || [ -n "$line" ]; do
-    if [[ "$line" =~ ^#(.*)$ ]]; then
-      local c="${BASH_REMATCH[1]}"
-      c="${c# }"
-      if [[ "$c" =~ ^[A-Z] ]] && [[ ! "$c" =~ [.,:!?] ]] && [ "$(wc -w <<<"$c")" -le 4 ]; then
-        section="$c"; section_shown=0
-      fi
-      continue
-    fi
-
-    if [[ "$line" =~ ^alias[[:space:]]+([^=]+)=(.*)$ ]]; then
-      local a_name="${BASH_REMATCH[1]}"
-      local a_cmd="${BASH_REMATCH[2]}"
-      a_cmd="${a_cmd#[\"\']}"; a_cmd="${a_cmd%[\"\']}"
-
-      if [ -n "$pattern" ] && ! grep -qi -- "$pattern" <<<"$a_name $a_cmd"; then
-        continue
-      fi
-
-      if [ "$section_shown" -eq 0 ] && [ -n "$section" ]; then
-        printf "\n${hdr}── %s ──${reset}\n" "$section"
-        section_shown=1
-      fi
-      printf "  ${name}%-22s${arrow} → ${reset}%s\n" "$a_name" "$a_cmd"
-      ((count++))
-    fi
-  done < "$file"
-
-  if [ -n "$pattern" ] && [ "$count" -eq 0 ]; then
-    echo "No aliases matching: $pattern" >&2
+  if [ -n "$pattern" ] && [ "$total" -eq 0 ]; then
+    echo "aliases: no matches for: $pattern" >&2
     return 1
   fi
   echo

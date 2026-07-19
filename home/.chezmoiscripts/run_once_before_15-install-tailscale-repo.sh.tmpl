@@ -11,7 +11,7 @@ NEEDS_TAILSCALE=true
 {{- end }}
 {{- end }}
 
-{{- if .devcontainer }}
+{{- if or (eq .role "devops") (eq .role "local") (eq .role "remote") }}
 NEEDS_TAILSCALE=true
 {{- end }}
 

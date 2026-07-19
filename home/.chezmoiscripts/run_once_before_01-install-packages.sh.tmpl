@@ -11,8 +11,13 @@ PACKAGES=(
 {{- range .packages.common.list }}
   {{ . | quote }}
 {{- end }}
-{{- $roleList := index .packages .role }}
-{{- range $roleList.list }}
+{{- $rolePkgList := list -}}
+{{- if or (eq .role "devops") (eq .role "local") (eq .role "remote") -}}
+{{-   $rolePkgList = .packages.container.list | default list -}}
+{{- else -}}
+{{-   $rolePkgList = (index .packages .role).list | default list -}}
+{{- end -}}
+{{- range $rolePkgList }}
   {{ . | quote }}
 {{- end }}
 {{- if .gui }}

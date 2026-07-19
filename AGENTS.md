@@ -11,17 +11,27 @@ never applied to `$HOME`.
 
 ```text
 home/
-├── .chezmoidata/          # host, role, tool, package, fragment, server data
-├── .chezmoiscripts/       # run_once_* / run_onchange_* scripts
+├── .chezmoidata/          # host, role, tool, package, fragment, module data
+├── .chezmoiscripts/       # run_once_* / run_onchange_* scripts (flat, no shared/)
 ├── .chezmoitemplates/     # reusable template fragments
 ├── dot_config/            # ~/.config/* templates
 ├── dot_dotfiles/          # ~/.dotfiles/* shell modules and helpers
+│   ├── bash/              # bash init + late-init
+│   ├── zsh/               # zsh rc, init, late-init (no duplicate bootstrap loading)
+│   ├── common/            # aliases, functions, prompt (all roles)
+│   ├── laptop/            # laptop-only SSH/server helpers
+│   ├── container/         # k8s/terraform helpers (devops, local, remote roles)
+│   ├── local/             # local devcontainer env defaults
+│   ├── remote/            # remote devcontainer env defaults
+│   └── fragments/         # optional, role-gated shell function files
 ├── dot_local/             # ~/.local/* binaries and helpers
 ├── private_dot_ssh/       # ~/.ssh/* templates
 ├── dot_bashrc.tmpl        # ~/.bashrc
 ├── dot_zshrc.tmpl         # ~/.zshrc
 └── ...
 ```
+
+Repo root (never applied to `$HOME`): `.devcontainer/`, `tests/`, `docs/`, `bootstrap.sh`.
 
 ## The `role` vs `gui` distinction — never conflate these
 
@@ -137,18 +147,20 @@ checks for the tool before activating.
 
 Ubuntu packages are installed by `home/.chezmoiscripts/run_once_before_01-install-packages.sh.tmpl`
 and merged from `[packages.common]`, `[packages.<role>]`, and `[packages.gui]`
-when the host has `gui=true`.
+when the host has `gui=true`. Container roles (`devops`, `local`, `remote`) share
+`[packages.container]` instead of duplicating identical lists.
 
 Mise tools are declared in `[tools.common]`, `[tools.<role>]`, and `[tools.gui]`
-and merged in `home/dot_config/mise/config.toml.tmpl`.
+and merged in `home/dot_config/mise/config.toml.tmpl`. Container roles share
+`[tools.container]`.
 
 ## Development vs production
 
 - **Laptop** may include Docker, Node.js, GUI apps, development SDKs, and desktop configuration.
 - **Server** prioritizes security, stability, and a minimal footprint. Avoid GUI software.
 - **VM** stays lightweight and disposable.
-- **DevOps / devcontainer** — three roles share k8s/terraform helpers and Coolify
-  management, but differ in environment defaults:
+- **DevOps / devcontainer** — three roles share k8s/terraform helpers under
+  `dot_dotfiles/container/` and Coolify management, but differ in environment defaults:
   - **`local`** (`devops-local01`) — devcontainer on the laptop; SSH keys bind-mounted,
     remote Docker context, Dozzle on the Coolify host via Tailscale.
   - **`remote`** (`devops-remote01`) — devcontainer on the Coolify host; local Docker

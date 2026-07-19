@@ -1,4 +1,4 @@
-# Kubernetes helpers — loaded for the devops role.
+# Kubernetes helpers — loaded for container roles (devops, local, remote).
 # Requires: kubectl, helm, k9s (installed via mise).
 
 # ── Context helpers ──────────────────────────────────────────────────

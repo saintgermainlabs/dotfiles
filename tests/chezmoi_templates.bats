@@ -123,11 +123,9 @@ setup() {
     echo "$output" | grep 'Templates/'
 }
 
-@test "[templates] .chezmoiignore.tmpl excludes other role dirs" {
+@test "[templates] .chezmoiignore.tmpl always ignores chezmoi metadata" {
     run render_as_host "ubuntu-laptop" "home/.chezmoiignore.tmpl"
     [ "$status" -eq 0 ]
-    echo "$output" | grep '\.local/bin/server/'
-    echo "$output" | grep '\.local/bin/vm/'
-    echo "$output" | grep '\.local/bin/local/'
-    echo "$output" | grep '\.local/bin/remote/'
+    echo "$output" | grep '/.chezmoidata/'
+    echo "$output" | grep '/.chezmoiscripts/'
 }

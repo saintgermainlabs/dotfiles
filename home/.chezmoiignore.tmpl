@@ -11,36 +11,6 @@
 Templates/
 {{- end }}
 
-# Role-conditional target paths.
-{{- if ne .role "laptop" }}
-.local/bin/laptop/
-{{- end }}
-
-{{- if ne .role "server" }}
-.local/bin/server/
-{{- end }}
-
-{{- if ne .role "vm" }}
-.local/bin/vm/
-{{- end }}
-
-{{- if ne .role "devops" }}
-.local/bin/devops/
-{{- end }}
-
-{{- if ne .role "local" }}
-.local/bin/local/
-{{- end }}
-
-{{- if ne .role "remote" }}
-.local/bin/remote/
-{{- end }}
-
-# Role-specific scripts (keyed on .role, not hostname).
-{{- if ne .role "laptop" }}
-.chezmoiscripts/laptop
-{{- end }}
-
 # Git directory placeholders.
 .gitkeep
 

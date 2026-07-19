@@ -1,4 +1,4 @@
-# Terraform helpers — loaded for the devops role.
+# Terraform helpers — loaded for container roles (devops, local, remote).
 # Requires: terraform, terraform-ls (installed via mise).
 
 # ── Workspace helpers ────────────────────────────────────────────────

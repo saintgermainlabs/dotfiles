@@ -1,203 +1,167 @@
-# List containers
+# Docker container helpers — partial-name lookup and diagnostics.
 
+# List running containers with name, status, and ports.
 cps() {
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+  docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 }
 
-# Search containers by partial name
-
+# Search all containers (including stopped) by partial name.
+# Usage: cfind <partial-name>
 cfind() {
-docker ps -a --format "{{.Names}}" | grep -i "$1"
-
+  docker ps -a --format "{{.Names}}" | grep -i "$1"
 }
 
-# Get first matching container name
-
+# @internal — resolve the first container name matching a partial name.
 _cmatch() {
-docker ps -a --format "{{.Names}}" | grep -i "$1" | head -n1
+  docker ps -a --format "{{.Names}}" | grep -i "$1" | head -n1
 }
 
-# Logs
-
+# Follow logs for a container matched by partial name.
+# Usage: clogs <partial-name>
 clogs() {
-local c=$(_cmatch "$1")
-[ -z "$c" ] && echo "No container found" && return 1
-docker logs --tail=100 -f "$c"
+  local c=$(_cmatch "$1")
+  [ -z "$c" ] && echo "No container found" && return 1
+  docker logs --tail=100 -f "$c"
 }
 
-# Inspect
-
+# Inspect a container matched by partial name.
+# Usage: cinspect <partial-name>
 cinspect() {
-local c=$(_cmatch "$1")
-[ -z "$c" ] && echo "No container found" && return 1
-docker inspect "$c"
+  local c=$(_cmatch "$1")
+  [ -z "$c" ] && echo "No container found" && return 1
+  docker inspect "$c"
 }
 
-# Shell
-
+# Open an interactive shell in a container matched by partial name.
+# Usage: csh <partial-name>
 csh() {
-local c=$(_cmatch "$1")
-[ -z "$c" ] && echo "No container found" && return 1
-
-docker exec -it "$c" sh 2>/dev/null || \
-docker exec -it "$c" bash
-
+  local c=$(_cmatch "$1")
+  [ -z "$c" ] && echo "No container found" && return 1
+  docker exec -it "$c" sh 2>/dev/null || docker exec -it "$c" bash
 }
 
-# Restart
-
+# Restart a container matched by partial name.
+# Usage: crestart <partial-name>
 crestart() {
-local c=$(_cmatch "$1")
-[ -z "$c" ] && echo "No container found" && return 1
-docker restart "$c"
+  local c=$(_cmatch "$1")
+  [ -z "$c" ] && echo "No container found" && return 1
+  docker restart "$c"
 }
 
-# Container IP
-
+# Show the IP address of a container matched by partial name.
+# Usage: cip <partial-name>
 cip() {
-local c=$(_cmatch "$1")
-[ -z "$c" ] && echo "No container found" && return 1
-
-docker inspect \
--f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' \
-"$c"
-
+  local c=$(_cmatch "$1")
+  [ -z "$c" ] && echo "No container found" && return 1
+  docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$c"
 }
 
-# Networks
-
+# List Docker networks attached to a container matched by partial name.
+# Usage: cnet <partial-name>
 cnet() {
-local c=$(_cmatch "$1")
-[ -z "$c" ] && echo "No container found" && return 1
-
-docker inspect \
--f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' \
-"$c"
-
+  local c=$(_cmatch "$1")
+  [ -z "$c" ] && echo "No container found" && return 1
+  docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' "$c"
 }
 
-# Health
-
+# Show container status and healthcheck state by partial name.
+# Usage: chealth <partial-name>
 chealth() {
-local c=$(_cmatch "$1")
-[ -z "$c" ] && echo "No container found" && return 1
-
-docker inspect \
--f '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' \
-"$c"
-
+  local c=$(_cmatch "$1")
+  [ -z "$c" ] && echo "No container found" && return 1
+  docker inspect -f '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' "$c"
 }
 
-# Test HTTP from inside container
-
+# Test HTTP from inside a container on the given port.
+# Usage: ccurl <partial-name> [port]
 ccurl() {
-local c=$(_cmatch "$1")
-local port=${2:-80}
-
-[ -z "$c" ] && echo "No container found" && return 1
-
-docker exec "$c" sh -c \
-"which curl >/dev/null && curl -I http://localhost:${port} || wget --spider http://localhost:${port}"
-
+  local c=$(_cmatch "$1")
+  local port=${2:-80}
+  [ -z "$c" ] && echo "No container found" && return 1
+  docker exec "$c" sh -c \
+    "which curl >/dev/null && curl -I http://localhost:${port} || wget --spider http://localhost:${port}"
 }
 
-# Show exposed ports
-
+# Show published host ports for a container matched by partial name.
+# Usage: cports <partial-name>
 cports() {
-local c=$(_cmatch "$1")
-[ -z "$c" ] && echo "No container found" && return 1
-
-docker port "$c"
-
+  local c=$(_cmatch "$1")
+  [ -z "$c" ] && echo "No container found" && return 1
+  docker port "$c"
 }
 
-# Quick diagnostic
-
+# Print a quick diagnostic summary for a container matched by partial name.
+# Usage: cdiag <partial-name>
 cdiag() {
-local c=$(_cmatch "$1")
+  local c=$(_cmatch "$1")
+  [ -z "$c" ] && echo "No container found" && return 1
 
-[ -z "$c" ] && echo "No container found" && return 1
-
-echo "Container: $c"
-echo
-
-echo "Status:"
-docker inspect -f '{{.State.Status}}' "$c"
-
-echo
-echo "Health:"
-docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}No healthcheck{{end}}' "$c"
-
-echo
-echo "Networks:"
-docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' "$c"
-
-echo
-echo "IP:"
-docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$c"
-
-echo
-echo "Ports:"
-docker port "$c"
-
-echo
-echo "Recent Logs:"
-docker logs --tail=20 "$c"
-
+  echo "Container: $c"
+  echo
+  echo "Status:"
+  docker inspect -f '{{.State.Status}}' "$c"
+  echo
+  echo "Health:"
+  docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}No healthcheck{{end}}' "$c"
+  echo
+  echo "Networks:"
+  docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' "$c"
+  echo
+  echo "IP:"
+  docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$c"
+  echo
+  echo "Ports:"
+  docker port "$c"
+  echo
+  echo "Recent Logs:"
+  docker logs --tail=20 "$c"
 }
 
-# Coolify-specific helpers
-
+# Find Coolify containers by partial name.
 coolify() {
-cfind coolify
+  cfind coolify
 }
 
+# Find Traefik containers by partial name.
 traefik() {
-cfind traefik
+  cfind traefik
 }
 
+# Find Nextcloud containers by partial name.
 nextcloud() {
-cfind nextcloud
+  cfind nextcloud
 }
 
-
-
-
+# Find containers by Coolify resourceName label.
+# Usage: cresource <resource-name-pattern>
 cresource() {
-for c in $(docker ps -a --format '{{.Names}}'); do
-
-resource=$(docker inspect \
--f '{{index .Config.Labels "coolify.resourceName"}}' \
-"$c" 2>/dev/null)
-
-if echo "$resource" | grep -iq "$1"; then
-echo "$c"
-fi
-done
+  for c in $(docker ps -a --format '{{.Names}}'); do
+    local resource
+    resource=$(docker inspect -f '{{index .Config.Labels "coolify.resourceName"}}' "$c" 2>/dev/null)
+    if echo "$resource" | grep -iq "$1"; then
+      echo "$c"
+    fi
+  done
 }
 
-
+# List all containers with Coolify resource and compose service labels.
 docker_inventory() {
-
-for c in $(docker ps -a --format '{{.Names}}'); do
-docker inspect "$c" \
---format '{{.Name}} | {{index .Config.Labels "coolify.resourceName"}} | {{index .Config.Labels "com.docker.compose.service"}}'
-done
-
+  for c in $(docker ps -a --format '{{.Names}}'); do
+    docker inspect "$c" \
+      --format '{{.Name}} | {{index .Config.Labels "coolify.resourceName"}} | {{index .Config.Labels "com.docker.compose.service"}}'
+  done
 }
 
+# Tabular view of running containers with Coolify resource and service names.
 cservices() {
-printf "%-30s %-20s %-50s\n" "RESOURCE" "SERVICE" "CONTAINER"
-
-for c in $(docker ps --format '{{.Names}}'); do
-resource=$(docker inspect "$c" -f '{{index .Config.Labels "coolify.resourceName"}}' 2>/dev/null)
-service=$(docker inspect "$c" -f '{{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null)
-
-printf "%-30s %-20s %-50s\n" "$resource" "$service" "$c"
-done
+  printf "%-30s %-20s %-50s\n" "RESOURCE" "SERVICE" "CONTAINER"
+  for c in $(docker ps --format '{{.Names}}'); do
+    local resource service
+    resource=$(docker inspect "$c" -f '{{index .Config.Labels "coolify.resourceName"}}' 2>/dev/null)
+    service=$(docker inspect "$c" -f '{{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null)
+    printf "%-30s %-20s %-50s\n" "$resource" "$service" "$c"
+  done
 }
-
-# ── Remote Docker context (SSH via Tailscale) ──────────────────────
 
 # Create or switch to an SSH-backed Docker context for a Coolify host.
 # Usage: docker_remote_use [user@]hostname [context-name]
@@ -214,7 +178,7 @@ docker_remote_use() {
   local docker_host="ssh://${target}"
   if docker context inspect "$ctx_name" >/dev/null 2>&1; then
     docker context update "$ctx_name" --docker "host=${docker_host}" 2>/dev/null \
-      || docker context rm "$ctx_name" && docker context create "$ctx_name" --docker "host=${docker_host}"
+      || { docker context rm "$ctx_name" && docker context create "$ctx_name" --docker "host=${docker_host}"; }
   else
     docker context create "$ctx_name" --docker "host=${docker_host}"
   fi
@@ -222,17 +186,20 @@ docker_remote_use() {
   echo "Using Docker context '${ctx_name}' -> ${docker_host}"
 }
 
+# List containers on the active (remote) Docker context.
 docker_remote_ps() {
   docker ps "$@"
 }
 
+# Follow logs for a container on the active Docker context.
+# Usage: docker_remote_logs <container>
 docker_remote_logs() {
   local container="${1:-}"
   [ -z "$container" ] && { echo "Usage: docker_remote_logs <container>" >&2; return 1; }
   docker logs --tail=100 -f "$container"
 }
 
+# Show live resource usage for containers on the active Docker context.
 docker_remote_stats() {
   docker stats "$@"
 }
-

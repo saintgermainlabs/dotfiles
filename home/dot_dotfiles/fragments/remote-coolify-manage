@@ -233,7 +233,8 @@ coolify_diag() {
 
 # ── Health and API debugging ─────────────────────────────────────────
 
-# Resolve Coolify API base URL and token from CLI config
+# Resolve Coolify API base URL and token from CLI config.
+# @internal
 _coolify_api_config() {
   local config="${HOME}/.config/coolify/config.json"
   if [ ! -f "$config" ]; then
@@ -277,7 +278,8 @@ coolify_health() {
   return "$failed"
 }
 
-# Authenticated GET against Coolify API v1
+# Authenticated GET against the Coolify API v1.
+# Usage: coolify_curl <api-path>
 coolify_curl() {
   local path="${1:-}"
   [ -z "$path" ] && { echo "Usage: coolify_curl <api-path>" >&2; return 1; }
@@ -290,7 +292,8 @@ coolify_curl() {
     "${fqdn}/api/v1/${path}"
 }
 
-# Same as coolify_curl but via httpie for readable output
+# Same as coolify_curl but via httpie for readable output.
+# Usage: coolify_api <api-path>
 coolify_api() {
   local path="${1:-}"
   [ -z "$path" ] && { echo "Usage: coolify_api <api-path>" >&2; return 1; }
@@ -307,7 +310,8 @@ coolify_api() {
   http GET "${fqdn}/api/v1/${path}" "Authorization:Bearer ${token}" Accept:application/json
 }
 
-# Tail logs for an app by name or UUID
+# Tail logs for a Coolify application by name or UUID.
+# Usage: coolify_app_logs <app-name-or-uuid>
 coolify_app_logs() {
   local name="${1:-}"
   [ -z "$name" ] && { echo "Usage: coolify_app_logs <app-name-or-uuid>" >&2; return 1; }
@@ -320,7 +324,8 @@ coolify_app_logs() {
   }
 }
 
-# Check SSL certificate expiry for a URL
+# Check SSL certificate expiry for an HTTPS URL.
+# Usage: coolify_ssl_check <https-url>
 coolify_ssl_check() {
   local url="${1:-}"
   [ -z "$url" ] && { echo "Usage: coolify_ssl_check <https-url>" >&2; return 1; }
@@ -333,7 +338,8 @@ coolify_ssl_check() {
     || { echo "SSL check failed for $url" >&2; return 1; }
 }
 
-# Poll deployment status for a resource UUID
+# Poll deployment status for a Coolify resource UUID.
+# Usage: coolify_deploy_status <resource-uuid>
 coolify_deploy_status() {
   local uuid="${1:-}"
   [ -z "$uuid" ] && { echo "Usage: coolify_deploy_status <resource-uuid>" >&2; return 1; }

@@ -2,39 +2,65 @@
 
 # File system
 _EZA='eza --color=always --color-scale=all --color-scale-mode=gradient --icons=always --group-directories-first'
+# List directory entries with icons and gradient sizes.
 alias l="$_EZA"
+# Long listing with git status and human-readable sizes.
 alias ll="$_EZA -l --git -h"
+# List all entries including hidden files.
 alias la="$_EZA -a"
+# Long listing of all entries including hidden files.
 alias lla="$_EZA -a -l --git -h"
+# Compact list with icons (eza replacement for ls).
 alias ls='eza -lh --group-directories-first --icons=auto'
+# Compact list including hidden files.
 alias lsa='eza -lh --group-directories-first --icons=auto -a'
+# Tree view two levels deep with git status.
 alias lt='eza --tree --level=2 --long --icons --git'
+# Tree view including hidden files.
 alias lta='lt -a'
 unset _EZA
 
+# Fuzzy-find files with bat syntax preview.
 alias ff="fzf --preview 'batcat --style=numbers --color=always {}'"
+# Find files by name (fdfind).
 alias fd='fdfind'
 
 # Directories
+# Go up one directory.
 alias ..='cd ..'
+# Go up two directories.
 alias ...='cd ../..'
+# Go up three directories.
 alias ....='cd ../../..'
+# Create parent directories as needed.
 alias md='mkdir -p'
+# Remove an empty directory.
 alias rd='rmdir'
 
 # Tools
+# Open Neovim on a path, or the current directory when called with no args.
 n() { if [ "$#" -eq 0 ]; then nvim .; else nvim "$@"; fi; }
+# Shorthand for git.
 alias g='git'
+# Shorthand for docker.
 alias d='docker'
+# Shorthand for rails.
 alias r='rails'
+# Shorthand for batcat on Ubuntu/Debian.
 alias bat='batcat'
+# Shorthand for lazygit.
 alias lzg='lazygit'
+# Shorthand for lazydocker.
 alias lzd='lazydocker'
 
 # Git
+# Commit with a message.
 alias gcm='git commit -m'
+# Stage all changes and commit with a message.
 alias gcam='git commit -a -m'
+# Stage all changes and amend the previous commit.
 alias gcad='git commit -a --amend'
 
 # Docker
+# Run docker-compose using the dev compose file.
 alias dcd='docker-compose -f docker-compose.dev.yml'

@@ -6,7 +6,8 @@
 : "${REMOTE_PORT:=22}"
 : "${REMOTE_SSH_KEY:=$HOME/.ssh/id_ed25519_server}"
 
-# Download a folder from the remote server.
+# Download a folder from the remote dev server via rsync.
+# Usage: download_remote_folder [remote_path] [local_path]
 download_remote_folder() {
   local REMOTE_PATH="${1:-/srv/projects/}"
   local LOCAL_PATH="${2:-$HOME/projects/remote}"
@@ -24,7 +25,8 @@ download_remote_folder() {
     "$LOCAL_PATH"
 }
 
-# Interact with a remote server: tunnel, copy, or sync.
+# Interact with the remote dev server: tunnel, copy, or sync.
+# Usage: remote <tunnel|copy|sync> [args...]
 remote() {
   local key="$REMOTE_SSH_KEY"
   local user="$REMOTE_USER"

@@ -1,5 +1,9 @@
 [tools]
-{{- $tools := merge .tools.common (index .tools .role) -}}
+{{- $roleTools := index .tools .role | default dict -}}
+{{- if or (eq .role "devops") (eq .role "local") (eq .role "remote") -}}
+{{-   $roleTools = .tools.container | default dict -}}
+{{- end -}}
+{{- $tools := merge .tools.common $roleTools -}}
 {{- if .gui }}{{ $tools = merge $tools .tools.gui }}{{ end -}}
 {{- /* Ensure tools required by active modules are present. Modules list tool names;
      if they don't appear in the base tool lists, they get a 'latest' default. */ -}}

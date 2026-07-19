@@ -1,17 +1,18 @@
 # Common functions used across hosts.
 
-# Create a gzip-compressed tarball from a file or directory.
+# Extract a gzip-compressed tarball from a file or directory.
 compress() { tar -czf "${1%/}.tar.gz" "${1%/}"; }
+# Extract a .tar.gz archive.
 alias decompress="tar -xzf"
 
-# Convert webm files to mp4.
+# Convert webm files to mp4 (requires ffmpeg).
 webm2mp4() {
   input_file="$1"
   output_file="${input_file%.webm}.mp4"
   ffmpeg -i "$input_file" -c:v libx264 -preset slow -crf 22 -c:a aac -b:a 192k "$output_file"
 }
 
-# Write an ISO image to an SD card / USB device.
+# Write an ISO image to an SD card or USB device (requires root).
 iso2sd() {
   if [ $# -ne 2 ]; then
     echo "Usage: iso2sd <input_file> <output_device>"
@@ -24,7 +25,7 @@ iso2sd() {
   fi
 }
 
-# Activate a Python virtual environment in the current directory tree.
+# Activate a Python virtual environment found in the current directory tree.
 venv() {
   local candidate candidates=()
   for candidate in .venv venv .env env; do

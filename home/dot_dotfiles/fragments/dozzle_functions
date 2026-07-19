@@ -1,12 +1,14 @@
 # Dozzle diagnostics — reach Dozzle on the Coolify host via Tailscale.
 # Requires: DOZZLE_HOST, DOZZLE_PORT (and optional DOZZLE_USER/DOZZLE_PASS).
 
+# Build the Dozzle base URL from DOZZLE_HOST and DOZZLE_PORT.
 dozzle_url() {
   local host="${DOZZLE_HOST:-ubuntu-24.tiger-bushmaster.ts.net}"
   local port="${DOZZLE_PORT:-8888}"
   echo "http://${host}:${port}"
 }
 
+# @internal — authenticated curl against the Dozzle API.
 _dozzle_curl() {
   local path="$1"
   local url
@@ -18,7 +20,7 @@ _dozzle_curl() {
   fi
 }
 
-# List active containers from Dozzle
+# List active containers from the Dozzle API.
 dozzle_containers() {
   _dozzle_curl "/api/containers" | jq -r '
     if type == "array" then
@@ -29,12 +31,13 @@ dozzle_containers() {
   ' 2>/dev/null || _dozzle_curl "/api/containers"
 }
 
-# Hardware stats per container
+# Show hardware stats per container from the Dozzle API.
 dozzle_stats() {
   _dozzle_curl "/api/stats" | jq '.' 2>/dev/null || _dozzle_curl "/api/stats"
 }
 
-# Find containers matching a pattern
+# Find Dozzle containers matching a name pattern.
+# Usage: dozzle_find <pattern>
 dozzle_find() {
   local pattern="${1:-}"
   [ -z "$pattern" ] && { echo "Usage: dozzle_find <pattern>" >&2; return 1; }
@@ -44,7 +47,7 @@ dozzle_find() {
   }
 }
 
-# Stream logs from a container (SSE)
+# Stream logs from a Dozzle container (SSE).
 # Usage: dozzle_logs <container_id> [--tail N]
 dozzle_logs() {
   local id="${1:-}"
@@ -64,7 +67,7 @@ dozzle_logs() {
   fi
 }
 
-# Quick Dozzle connectivity check
+# Quick Dozzle connectivity check and container preview.
 dozzle_health() {
   echo "=== Dozzle ==="
   echo "URL: $(dozzle_url)"
