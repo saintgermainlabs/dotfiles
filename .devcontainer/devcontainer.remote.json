@@ -1,0 +1,39 @@
+{
+  "name": "Dotfiles Devcontainer (Remote Host)",
+  "extends": "./devcontainer.base.json",
+  "build": {
+    "dockerfile": "docker/Dockerfile",
+    "context": ".",
+    "target": "dotfiles"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": false,
+      "upgradePackages": false
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:2": {},
+    "ghcr.io/devcontainers/features/docker-cli:1": {
+      "version": "latest",
+      "dockerDashComposeVersion": "v2"
+    }
+  },
+  "mounts": [
+    "source=devcontainer-tailscale-state-remote,target=/var/lib/tailscale,type=volume"
+  ],
+  "remoteEnv": {
+    "DOTFILES_ROLE": "remote",
+    "DOTFILES_HOSTNAME": "devops-remote01",
+    "OP_SERVICE_ACCOUNT_TOKEN": "${localEnv:OP_SERVICE_ACCOUNT_TOKEN}"
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postStartCommand": "bash .devcontainer/post-start.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "tamasfe.even-better-toml",
+        "ms-python.python",
+        "charliermarsh.ruff"
+      ]
+    }
+  }
+}

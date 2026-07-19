@@ -1,0 +1,20 @@
+{
+  "remoteUser": "vscode",
+  "runArgs": [
+    "--device=/dev/net/tun",
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW"
+  ],
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,readonly,type=bind,consistency=cached",
+    "source=devcontainer-primordial-state,target=/var/lib/primordial,type=volume"
+  ],
+  "secrets": {
+    "OP_SERVICE_ACCOUNT_TOKEN": {
+      "description": "1Password service account for chezmoi age + Coolify token"
+    },
+    "TAILSCALE_AUTHKEY": {
+      "description": "Reusable or ephemeral Tailscale auth key for this devcontainer"
+    }
+  }
+}
