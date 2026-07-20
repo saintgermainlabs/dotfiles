@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Apply dot_desktop/default-apps.toml associations after chezmoi apply.
+set -euo pipefail
+
+{{ if not .gui }}
+exit 0
+{{ end }}
+
+APPLY="${HOME}/.desktop/bin/desktop-mime-apply"
+CONFIG="${HOME}/.desktop/default-apps.toml"
+
+if [ ! -f "$CONFIG" ]; then
+  echo "[dot-desktop-default-apps] skip: $CONFIG not present" >&2
+  exit 0
+fi
+
+if [ ! -x "$APPLY" ]; then
+  echo "[dot-desktop-default-apps] skip: $APPLY not executable" >&2
+  exit 0
+fi
+
+if ! command -v xdg-mime >/dev/null 2>&1; then
+  echo "[dot-desktop-default-apps] skip: xdg-mime not installed" >&2
+  exit 0
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "[dot-desktop-default-apps] skip: python3 not installed" >&2
+  exit 0
+fi
+
+# chezmoi:change $HOME/.desktop/default-apps.toml
+
+echo "[dot-desktop-default-apps] applying MIME defaults..."
+"$APPLY"

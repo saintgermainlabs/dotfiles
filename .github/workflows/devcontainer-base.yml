@@ -27,6 +27,8 @@ jobs:
             image: linux-mgmt-primordial
           - target: base
             image: linux-mgmt-base
+          - target: dotfiles
+            image: linux-mgmt-dotfiles
     steps:
       - name: Checkout
         uses: actions/checkout@v4

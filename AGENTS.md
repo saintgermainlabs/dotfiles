@@ -26,6 +26,8 @@ home/
 │   ├── compiled/          # shell.tmpl → ~/.dotfiles/compiled/shell (generated)
 │   └── fragments/         # optional, role-gated shell function files (source-only)
 ├── dot_local/             # ~/.local/* binaries and helpers
+├── dot_desktop/           # ~/.desktop/* — GUI-only configs and desktop tools
+├── Desktop/               # ~/Desktop/* — GUI-only desktop shortcuts/icons
 ├── private_dot_ssh/       # ~/.ssh/* templates
 ├── dot_bashrc.tmpl        # ~/.bashrc
 ├── dot_zshrc.tmpl         # ~/.zshrc
@@ -44,7 +46,7 @@ Two independent axes describe a host:
   - `local` — devcontainer on the laptop; remote Docker/Coolify/Dozzle via Tailscale + SSH
   - `remote` — devcontainer on the Coolify host; local Docker socket, Dozzle on localhost
 - **GUI**: whether the machine has a graphical desktop. Boolean.
-  Controls GUI packages, GUI helper scripts, Nautilus templates, autostart, etc.
+  Controls GUI packages, GUI helper scripts, Nautilus templates, autostart, `~/.desktop`, etc.
 
 **Rule:** a server can have `gui=true`; a laptop can have `gui=false`. Do not
 use `.role == "laptop"` to mean "this host has a GUI". Gate GUI things on
@@ -65,6 +67,8 @@ Host metadata lives in `home/.chezmoidata/hosts.toml` and is read by
 | Public SSH servers | `home/.chezmoidata/roles.toml` (`[servers]`) |
 | Shared fragment loader | `home/.chezmoitemplates/load-fragments.tmpl` |
 | GUI helper scripts | `home/dot_local/bin/gui/` |
+| Desktop / GUI-only home files | `home/dot_desktop/` → `~/.desktop/`, `home/Desktop/` → `~/Desktop/` |
+| Default app associations | `home/dot_desktop/default-apps.toml` → `~/.config/mimeapps.list` (GUI only) |
 | Per-role shell helpers | `home/dot_dotfiles/<role>/` |
 
 ## Core principles

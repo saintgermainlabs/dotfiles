@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Install Debian Package
+Comment=Install a .deb package in a terminal (sudo dpkg -i)
+TryExec={{ .chezmoi.homeDir }}/.desktop/bin/deb-install
+Exec={{ .chezmoi.homeDir }}/.desktop/bin/deb-install %f
+Icon=package-x-generic
+Terminal=false
+NoDisplay=true
+MimeType=application/vnd.debian.binary-package;application/x-deb;
+Categories=PackageManager;System;

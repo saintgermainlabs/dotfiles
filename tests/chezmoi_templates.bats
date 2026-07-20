@@ -112,6 +112,10 @@ setup() {
     [ "$status" -eq 0 ]
     # GUI paths should NOT be in the ignore list when gui=true
     ! echo "$output" | grep '\.local/bin/gui/'
+    ! echo "$output" | grep '\.desktop/'
+    ! echo "$output" | grep '^Desktop/'
+    ! echo "$output" | grep '\.config/mimeapps.list'
+    ! echo "$output" | grep 'deb-dpkg-install.desktop'
     ! echo "$output" | grep 'Templates/'
 }
 
@@ -120,6 +124,10 @@ setup() {
     [ "$status" -eq 0 ]
     # GUI paths SHOULD be in the ignore list when gui=false
     echo "$output" | grep '\.local/bin/gui/'
+    echo "$output" | grep '\.desktop/'
+    echo "$output" | grep '^Desktop/'
+    echo "$output" | grep '\.config/mimeapps.list'
+    echo "$output" | grep 'deb-dpkg-install.desktop'
     echo "$output" | grep 'Templates/'
 }
 

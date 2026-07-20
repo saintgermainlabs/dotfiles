@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=https://creativeprojects.github.io/resticprofile/jsonschema/config.json
+# resticprofile profiles — rendered by chezmoi to ~/.config/backups/restic/profiles.yaml
+# Repository and password come from the environment (never commit secrets here).
+version: "1"
+
+{{- if eq .role "server" }}
+production:
+  initialize: false
+  priority: low
+  restic-lock-retry-after: 1m
+  repository: "${RESTIC_REPOSITORY}"
+  password-file: "${RESTIC_PASSWORD_FILE}"
+  backup:
+    source:
+      - {{ .chezmoi.homeDir | quote }}
+    exclude:
+      - "**/.cache/**"
+      - "**/node_modules/**"
+      - "**/.venv/**"
+      - "**/vendor/**"
+      - "**/tmp/**"
+      - "**/temp/**"
+      - "/opt/backup-bot/decrypted-output/**"
+    exclude-caches: true
+    one-file-system: true
+    tag:
+      - production
+      - server
+    schedule: "hourly"
+  retention:
+    before-backup: false
+    after-backup: true
+    keep-hourly: 24
+    keep-daily: 14
+    keep-weekly: 8
+    keep-monthly: 12
+    prune: true
+    schedule: "daily"
+  check:
+    read-data-subset: "5%"
+    schedule: "weekly"
+{{- else if eq .role "laptop" }}
+personal:
+  initialize: false
+  priority: low
+  restic-lock-retry-after: 1m
+  repository: "${RESTIC_REPOSITORY}"
+  password-file: "${RESTIC_PASSWORD_FILE}"
+  backup:
+    source:
+      - {{ .chezmoi.homeDir | quote }}
+    exclude:
+      - "**/.cache/**"
+      - "**/node_modules/**"
+      - "**/.venv/**"
+      - "**/vendor/**"
+      - "**/tmp/**"
+      - "**/temp/**"
+    exclude-caches: true
+    one-file-system: true
+    tag:
+      - personal
+      - laptop
+    schedule: "daily"
+  retention:
+    before-backup: false
+    after-backup: true
+    keep-hourly: 24
+    keep-daily: 14
+    keep-weekly: 8
+    keep-monthly: 12
+    prune: true
+    schedule: "daily"
+  check:
+    read-data-subset: "5%"
+    schedule: "weekly"
+{{- end }}

@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Apply default-apps.toml MIME and extension associations (GUI hosts).
+set -euo pipefail
+
+CONFIG="${DESKTOP_APPS_CONFIG:-${HOME}/.desktop/default-apps.toml}"
+
+log() { printf '[desktop-mime-apply] %s\n' "$*"; }
+die() { printf '[desktop-mime-apply] ERROR: %s\n' "$*" >&2; exit 1; }
+
+[ -f "$CONFIG" ] || die "Missing config: $CONFIG (run chezmoi apply on a GUI host)"
+
+command -v python3 >/dev/null 2>&1 || die "python3 required"
+
+apply_mime_and_extensions() {
+  python3 - "$CONFIG" <<'PY'
+import pathlib
+import subprocess
+import sys
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore
+
+cfg_path = pathlib.Path(sys.argv[1])
+data = tomllib.loads(cfg_path.read_text(encoding="utf-8"))
+roles = data.get("roles", {})
+mime_map = data.get("mime", {})
+ext_map = data.get("extension", {})
+
+def resolve(target: str) -> str:
+    role = roles.get(target)
+    if isinstance(role, dict) and role.get("desktop"):
+        return str(role["desktop"])
+    return target
+
+def run(*args: str) -> None:
+    subprocess.run(args, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+# MIME defaults from [mime]
+for mime, target in mime_map.items():
+    run("xdg-mime", "default", resolve(str(target)), str(mime))
+
+# Extension defaults: map extension -> MIME via a temp file, then xdg-mime default
+seen_mimes: set[str] = set()
+tmpdir = pathlib.Path("/tmp/desktop-mime-apply")
+tmpdir.mkdir(mode=0o700, exist_ok=True)
+for ext, target in ext_map.items():
+    probe = tmpdir / f"probe.{ext}"
+    probe.write_text("", encoding="utf-8")
+    result = subprocess.run(
+        ["xdg-mime", "query", "filetype", str(probe)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    probe.unlink(missing_ok=True)
+    mime = (result.stdout or "").strip()
+    if not mime or mime in seen_mimes:
+        continue
+    seen_mimes.add(mime)
+    run("xdg-mime", "default", resolve(str(target)), mime)
+
+print(f"Applied {len(mime_map)} MIME defaults and {len(seen_mimes)} extension-derived types.")
+PY
+}
+
+update_desktop_database() {
+  if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
+  fi
+  if command -v update-mime-database >/dev/null 2>&1; then
+    update-mime-database "$HOME/.local/share/mime" 2>/dev/null || true
+  fi
+}
+
+main() {
+  apply_mime_and_extensions
+  update_desktop_database
+  log "Done. Config: $CONFIG"
+}
+
+main "$@"

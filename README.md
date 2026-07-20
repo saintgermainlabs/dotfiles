@@ -73,14 +73,23 @@ On push to `main`/`master`, GitHub Actions publishes:
 |---|---|---|
 | `ghcr.io/saintgermainlabs/linux-mgmt-primordial:24.04` | `primordial` | Shared foundation for custom devcontainers |
 | `ghcr.io/saintgermainlabs/linux-mgmt-base:24.04` | `base` | Primordial + vscode user + mount paths |
+| `ghcr.io/saintgermainlabs/linux-mgmt-dotfiles:24.04` | `dotfiles` | Base + python/uv/aider dotfiles provisioner layer |
 
 Tags also include `:latest` and the commit SHA. Pull (private packages require `gh auth login`):
 
 ```bash
 docker pull ghcr.io/saintgermainlabs/linux-mgmt-primordial:24.04
+docker pull ghcr.io/saintgermainlabs/linux-mgmt-dotfiles:24.04
 ```
 
 Child Dockerfiles can extend the published image instead of rebuilding locally:
+
+```dockerfile
+FROM ghcr.io/saintgermainlabs/linux-mgmt-dotfiles:24.04 AS devops
+# devops-specific layers...
+```
+
+Or from base:
 
 ```dockerfile
 FROM ghcr.io/saintgermainlabs/linux-mgmt-base:24.04 AS dotfiles

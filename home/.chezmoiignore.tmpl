@@ -18,7 +18,16 @@
 {{- if not .gui }}
 .local/bin/gui/
 .config/autostart/
+.config/mimeapps.list
+.local/share/applications/deb-dpkg-install.desktop
+.desktop/
+Desktop/
 Templates/
+{{- end }}
+
+# Backups config — server and laptop only (restic/resticprofile).
+{{- if not (or (eq .role "server") (eq .role "laptop")) }}
+.config/backups/
 {{- end }}
 
 # Git directory placeholders.

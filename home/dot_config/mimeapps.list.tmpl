@@ -1,0 +1,13 @@
+{{- if .gui -}}
+{{-   $cfg := joinPath .chezmoi.sourceDir "dot_desktop/default-apps.toml" | include | fromToml -}}
+{{-   $roles := $cfg.roles | default dict -}}
+# Managed by chezmoi — source: dot_desktop/default-apps.toml
+# Do not edit by hand; run `chezmoi apply` or `desktop-mime-apply`.
+
+[Default Applications]
+{{ range $mime, $target := $cfg.mime -}}
+{{-   $desktop := $target -}}
+{{-   if index $roles $target }}{{ $desktop = (index $roles $target).desktop }}{{ end }}
+{{ $mime }}={{ $desktop }};
+{{ end -}}
+{{- end -}}

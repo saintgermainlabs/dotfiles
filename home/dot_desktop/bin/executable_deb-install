@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Open a terminal and install a .deb with sudo dpkg -i (GUI default-app handler).
+set -euo pipefail
+
+deb="${1:-}"
+if [ -z "$deb" ] || [ ! -f "$deb" ]; then
+  printf 'deb-install: missing or unreadable file: %s\n' "${deb:-<none>}" >&2
+  exit 1
+fi
+
+deb="$(realpath "$deb")"
+
+pick_terminal() {
+  local t
+  for t in "${TERMINAL:-}" x-terminal-emulator gnome-terminal xfce4-terminal konsole tilix mate-terminal xterm; do
+    [ -n "$t" ] || continue
+    if command -v "$t" >/dev/null 2>&1; then
+      printf '%s\n' "$t"
+      return 0
+    fi
+  done
+  return 1
+}
+
+term="$(pick_terminal)" || {
+  printf 'deb-install: no terminal emulator found\n' >&2
+  exit 1
+}
+
+# Run install inside the terminal; keep open until Enter.
+inner=(bash -c 'sudo dpkg -i "$1"; rc=$?; echo; if [ "$rc" -eq 0 ]; then echo "Installed: $1"; else echo "dpkg failed (exit $rc). Try: sudo apt-get install -f"; fi; read -r -p "Press Enter to close..." _; exit "$rc"' bash "$deb")
+
+case "$(basename "$term")" in
+  gnome-terminal|mate-terminal|tilix)
+    exec "$term" -- "${inner[@]}"
+    ;;
+  xfce4-terminal|konsole|x-terminal-emulator)
+    exec "$term" -e "${inner[@]}"
+    ;;
+  xterm)
+    exec "$term" -e "${inner[@]}"
+    ;;
+  *)
+    exec "$term" -e "${inner[@]}"
+    ;;
+esac

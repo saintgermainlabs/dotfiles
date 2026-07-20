@@ -3,6 +3,7 @@
 paths = [
   "$HOME/bin",
   "$HOME/.local/bin",
+  "$HOME/.desktop/bin",
   "$HOME/.opencode/bin",
   "$HOME/.lmstudio/bin",
 ]
