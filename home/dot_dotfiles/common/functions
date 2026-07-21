@@ -1,9 +1,106 @@
-# Common functions used across hosts.
+## Helpers
+# Return success when a command is installed.
+has() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+
+## Directory functions
+mkcd() {
+    if [ "$#" -ne 1 ]; then
+        printf 'Usage: mkcd <directory>\n' >&2
+        return 2
+    fi
+
+    mkdir -p -- "$1" && cd -- "$1"
+}
+
+
+up() {
+    local levels="${1:-1}"
+    local destination=""
+
+    case "$levels" in
+        ''|*[!0-9]*)
+            printf 'Usage: up [positive-integer]\n' >&2
+            return 2
+            ;;
+    esac
+
+    while [ "$levels" -gt 0 ]; do
+        destination="../${destination}"
+        levels=$((levels - 1))
+    done
+
+    cd -- "$destination"
+}
+
+
+ff() {
+    if [ "$#" -ne 1 ]; then
+        printf 'Usage: ff <filename-pattern>\n' >&2
+        return 2
+    fi
+
+    find . -type f -iname "*$1*"
+}
+
+fdirectory() {
+    if [ "$#" -ne 1 ]; then
+        printf 'Usage: fdirectory <directory-pattern>\n' >&2
+        return 2
+    fi
+
+    find . -type d -iname "*$1*"
+}
+
+
+
+
+## Archives and file compression
 
 # Extract a gzip-compressed tarball from a file or directory.
 compress() { tar -czf "${1%/}.tar.gz" "${1%/}"; }
 # Extract a .tar.gz archive.
 alias decompress="tar -xzf"
+
+
+
+extract() {
+    if [ "$#" -ne 1 ]; then
+        printf 'Usage: extract <archive>\n' >&2
+        return 2
+    fi
+
+    local archive="$1"
+
+    if [ ! -f "$archive" ]; then
+        printf 'File not found: %s\n' "$archive" >&2
+        return 1
+    fi
+
+    case "$archive" in
+        *.tar.bz2|*.tbz2) tar -xjf "$archive" ;;
+        *.tar.gz|*.tgz)   tar -xzf "$archive" ;;
+        *.tar.xz|*.txz)   tar -xJf "$archive" ;;
+        *.tar.zst)        tar --zstd -xf "$archive" ;;
+        *.tar)            tar -xf "$archive" ;;
+        *.bz2)            bunzip2 "$archive" ;;
+        *.gz)             gunzip "$archive" ;;
+        *.xz)             unxz "$archive" ;;
+        *.zip)            unzip "$archive" ;;
+        *.7z)             7z x "$archive" ;;
+        *.rar)            unrar x "$archive" ;;
+        *)
+            printf 'Unsupported archive format: %s\n' "$archive" >&2
+            return 1
+            ;;
+    esac
+}
+
+
+## Videos and multimedia
+
 
 # Convert webm files to mp4 (requires ffmpeg).
 webm2mp4() {
@@ -24,6 +121,9 @@ iso2sd() {
     sudo eject "$2"
   fi
 }
+
+
+## Python tools
 
 # Activate a Python virtual environment found in the current directory tree.
 venv() {
@@ -74,3 +174,88 @@ venv() {
 
 # manual() and aliases() live in fragments/help_functions, compiled last into
 # ~/.dotfiles/compiled/shell by chezmoi apply.
+
+
+## Docker functions
+
+dsh() {
+    if [ "$#" -lt 1 ]; then
+        printf 'Usage: dsh <container> [command]\n' >&2
+        return 2
+    fi
+
+    local container="$1"
+    shift
+
+    if [ "$#" -gt 0 ]; then
+        docker exec -it "$container" "$@"
+    elif docker exec "$container" test -x /bin/bash 2>/dev/null; then
+        docker exec -it "$container" /bin/bash
+    else
+        docker exec -it "$container" /bin/sh
+    fi
+}
+
+drun() {
+    if [ "$#" -lt 1 ]; then
+        printf 'Usage: drun <image> [command]\n' >&2
+        return 2
+    fi
+
+    docker run --rm -it "$@"
+}
+
+dip() {
+    if [ "$#" -ne 1 ]; then
+        printf 'Usage: dip <container>\n' >&2
+        return 2
+    fi
+
+    docker inspect \
+        --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' \
+        "$1"
+}
+
+dstop-all() {
+    local containers
+    containers="$(docker ps -q)"
+
+    if [ -z "$containers" ]; then
+        printf 'No running containers.\n'
+        return 0
+    fi
+
+    printf '%s\n' "$containers"
+    printf 'Stop all running containers? [y/N] '
+
+    local answer
+    read -r answer
+
+    case "$answer" in
+        y|Y|yes|YES)
+            # Intentional word splitting of container IDs.
+            # shellcheck disable=SC2086
+            docker stop $containers
+            ;;
+        *)
+            printf 'Cancelled.\n'
+            ;;
+    esac
+}
+
+dprune() {
+    docker system df
+    printf 'Run Docker system prune? [y/N] '
+
+    local answer
+    read -r answer
+
+    case "$answer" in
+        y|Y|yes|YES)
+            docker system prune
+            ;;
+        *)
+            printf 'Cancelled.\n'
+            ;;
+    esac
+}

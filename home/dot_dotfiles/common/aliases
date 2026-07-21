@@ -1,5 +1,15 @@
 # Common aliases (work in bash and zsh).
 
+# File Installation
+alias yep='sudo apt install $1'
+alias nop='sudo apt remove $1
+
+# System Management
+alias whatsup='service --status-all'
+alias bye='shutdown -r now'  
+
+
+
 # File system
 _EZA='eza --color=always --color-scale=all --color-scale-mode=gradient --icons=always --group-directories-first'
 # List directory entries with icons and gradient sizes.
@@ -37,6 +47,11 @@ alias md='mkdir -p'
 # Remove an empty directory.
 alias rd='rmdir'
 
+alias grep='grep --color=auto'
+alias egrep='egrep --color=auto'
+alias fgrep='fgrep --color=auto'
+
+
 # Tools
 # Open Neovim on a path, or the current directory when called with no args.
 n() { if [ "$#" -eq 0 ]; then nvim .; else nvim "$@"; fi; }
@@ -61,6 +76,22 @@ alias gcam='git commit -a -m'
 # Stage all changes and amend the previous commit.
 alias gcad='git commit -a --amend'
 
+
+## GH
+
+if has gh; then
+    alias ghpr='gh pr view --web'
+    alias ghprs='gh pr list'
+    alias ghissues='gh issue list'
+    alias ghrepo='gh repo view --web'
+    alias ghruns='gh run list'
+    alias ghwatch='gh run watch'
+fi
+
+
+
 # Docker
 # Run docker-compose using the dev compose file.
 alias dcd='docker-compose -f docker-compose.dev.yml'
+
+
