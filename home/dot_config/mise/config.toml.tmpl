@@ -1,21 +1,35 @@
-[tools]
-{{- $roleTools := index .tools .role | default dict -}}
-{{- if or (eq .role "devops") (eq .role "local") (eq .role "remote") -}}
-{{-   $roleTools = .tools.container | default dict -}}
-{{- end -}}
-{{- $tools := merge .tools.common $roleTools -}}
-{{- if .gui }}{{ $tools = merge $tools .tools.gui }}{{ end -}}
-{{- /* Ensure tools required by active modules are present. Modules list tool names;
-     if they don't appear in the base tool lists, they get a 'latest' default. */ -}}
-{{- $moduleToolKeys := keys .module_tools | default list -}}
-{{- range $t := $moduleToolKeys -}}
-{{-   if not (hasKey $tools $t) -}}
-{{-     $tools = merge $tools (dict $t "latest") -}}
-{{-   end -}}
-{{- end -}}
-{{- range $tool, $version := $tools }}
-{{ $tool }} = {{ $version | quote }}
-{{- end }}
+[env]
+NODE_ENV = 'production'
+TS_SERVE_CONFIG_DIR="${HOME}/tailscale/serve"
+PROJECT_ROOT = "${HOME}/.dotfiles"
+DATA_DIR = "${HOME}/.dotfiles/data"
 
 [settings]
 experimental = true
+
+
+[bootstrap.packages]
+"apt:jq" = "latest"
+"apt:curl" = "latest"
+"apt:build-essential" = "latest"
+
+shfmt = "latest"
+task = "latest"
+"apt:shellcheck" = "latest"
+
+
+[tools]
+"github:cli/cli" = "latest"            # GitHub CLI
+"github:BurntSushi/ripgrep" = "latest" # ripgrep binary
+node = "22"                     
+node = "lts"
+go = "latest"
+ripgrep = "latest"
+fzf = "latest"
+bat = "latest"
+age = 'latest'
+
+
+[settings]
+experimental = true
+

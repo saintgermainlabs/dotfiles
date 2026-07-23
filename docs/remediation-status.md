@@ -216,3 +216,6 @@ executable is available on `PATH` for the `vscode` user.
    features (e.g. docker-outside-of-docker) provide Docker CE; Ubuntu's
    `docker.io`/`docker-compose-v2` conflict with it. Gate on
    `REMOTE_CONTAINERS` and `command -v docker`.
+7. **`home/dot_config/mise/config.toml.tmpl` env paths** — use mise
+   `${HOME}/.dotfiles` interpolation for `PROJECT_ROOT`/`DATA_DIR`; chezmoi
+   has no built-in `config_root` template function.
