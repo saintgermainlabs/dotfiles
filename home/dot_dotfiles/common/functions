@@ -54,6 +54,7 @@ fdirectory() {
     find . -type d -iname "*$1*"
 }
 
+# Find files with a certain extension.
 
 ffext() {
     if [ -z "$1" ]; then
@@ -68,6 +69,7 @@ ffext() {
     find . -type f -name "*.$ext"
 }
 
+# Find certain types of files. Options (images/videos/documents/audio/archive)
 
 fftype() {
     if [ -z "$1" ]; then
