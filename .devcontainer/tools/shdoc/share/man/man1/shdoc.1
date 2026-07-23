@@ -1,0 +1,126 @@
+.TH SHDOC 1 "June 2026" "shdoc v1.4" "User Commands"
+.SH NAME
+shdoc \- generate Markdown API documentation from shell source comments
+.SH SYNOPSIS
+.B shdoc
+.RB [ \-h | \-\-help ]
+.br
+.B shdoc
+.RB [ \-\-version ]
+.br
+.B shdoc
+.RI [ FILE ]
+.SH DESCRIPTION
+.B shdoc
+reads a shell script, parses annotation comments, and writes GitHub-flavored
+Markdown documentation to standard output.
+If
+.I FILE
+is omitted, input is read from standard input.
+.PP
+Annotations are comments beginning with
+.BR "# @" .
+File annotations describe the generated document. Function annotations are
+collected until the next shell function declaration, where the pending block is
+rendered. Section annotations group following functions. Function-like text
+inside
+.B @example
+blocks is ignored.
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Show command-line help and exit.
+.TP
+.B \-\-version
+Show version information and exit.
+.SH ANNOTATIONS
+.TP
+.B @name
+Set the project name used as the document title.
+.TP
+.B @file
+Alias for
+.BR @name .
+.TP
+.B @brief
+Set a short project summary.
+.TP
+.B @description
+Set a multiline description for the file, current section, or next function.
+Continuation lines are written as comment lines after the tag.
+.TP
+.B @deprecated
+Mark the next documented function as deprecated.
+.TP
+.B @section
+Start a named section for following functions.
+.TP
+.B @example
+Add a multiline usage example for the next function. The captured block is
+unindented and rendered as a Bash code fence.
+.TP
+.B @option
+Describe a command-line option accepted by the function. Options may be short,
+long, or alternatives separated by a vertical bar.
+.TP
+.B @arg
+Describe a positional argument such as
+.BR $1
+or
+.BR $@ .
+.TP
+.B @noargs
+State that the function does not accept arguments.
+.TP
+.B @set
+Describe a global variable set by the function.
+.TP
+.B @exitcode
+Describe an exit status returned by the function.
+.TP
+.BR @stdin ", " @stdout ", " @stderr
+Describe expected standard input, standard output, or standard error.
+Indented comment lines continue the previous entry.
+.TP
+.B @see
+Add a related function, anchor, or Markdown link to the function's "See also"
+section.
+.TP
+.B @internal
+Skip documentation for the next annotated function.
+.SH EXAMPLES
+Generate documentation from standard input:
+.PP
+.nf
+shdoc < lib.sh > REFERENCE.md
+.fi
+.PP
+Generate documentation from a named file:
+.PP
+.nf
+shdoc lib.sh > REFERENCE.md
+.fi
+.PP
+Example annotated function:
+.PP
+.nf
+# @description Say hello to a name.
+# @arg $1 string Name to greet.
+# @stdout A greeting line.
+say-hello() {
+    echo "Hello $1"
+}
+.fi
+.SH EXIT STATUS
+.B shdoc
+exits 0 after successful generation or after printing help or version
+information. It exits non-zero when GNU Awk reports an error or when parsing
+fails.
+.SH FILES
+.TP
+.I contrib/shdoc.1
+Manual page distributed with the source tree.
+.SH SEE ALSO
+.BR gawk (1)
+.PP
+Project homepage: https://github.com/reconquest/shdoc

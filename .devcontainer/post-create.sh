@@ -53,6 +53,26 @@ install_glances_client() {
   export PATH="${HOME}/.local/bin:${PATH}"
 }
 
+install_shdoc() {
+  local shdoc_dir="${REPO_ROOT}/.devcontainer/tools/shdoc"
+  local shdoc_bin="${shdoc_dir}/bin"
+  if [ ! -x "${shdoc_dir}/install.sh" ]; then
+    log "shdoc installer missing at ${shdoc_dir}/install.sh; skipping"
+    return 0
+  fi
+  log "Installing shdoc..."
+  bash "${shdoc_dir}/install.sh" "${shdoc_dir}" || {
+    log "shdoc install failed (non-fatal)"
+    return 0
+  }
+  export PATH="${shdoc_bin}:${PATH}"
+  sudo tee /etc/profile.d/shdoc-devcontainer.sh >/dev/null <<EOF
+# Added by sgdotfilesfresh post-create — shdoc shell documentation generator.
+export PATH="${shdoc_bin}:\${PATH}"
+EOF
+  sudo chmod 644 /etc/profile.d/shdoc-devcontainer.sh
+}
+
 apply_dotfiles() {
   log "Applying dotfiles from ${REPO_ROOT}..."
   cd "${REPO_ROOT}"
@@ -78,6 +98,11 @@ verify_tools() {
   else
     log "WARN: coolify not on PATH yet (may install on next chezmoi apply)"
   fi
+  if command -v shdoc >/dev/null 2>&1; then
+    log "OK: shdoc ($(shdoc --version 2>/dev/null || echo installed))"
+  else
+    log "WARN: shdoc not on PATH"
+  fi
   chezmoi doctor || true
   return "$failed"
 }
@@ -87,6 +112,7 @@ main() {
   install_mise
   install_chezmoi
   install_glances_client
+  install_shdoc
   apply_dotfiles
   verify_tools
   log "Post-create complete."

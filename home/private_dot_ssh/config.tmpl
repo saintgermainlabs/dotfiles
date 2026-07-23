@@ -47,9 +47,10 @@ Host ubuntu
     IdentitiesOnly yes
     User dom
 
-# Default for all other hosts
+# Default SSH configuration
 Host *
-    IdentityFile ~/.ssh/id_ed25519_dev
+    IdentityAgent ~/.1password/agent.sock
+
 {{- end }}
 
 {{- range .servers.public }}
@@ -74,6 +75,4 @@ Host hetzner
     IdentityFile {{ env "SSH_HETZNER_KEY" }}
 {{- end }}
 
-# Default SSH configuration
-Host *
-    IdentityAgent ~/.1password/agent.sock
+

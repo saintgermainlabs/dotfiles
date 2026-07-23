@@ -55,6 +55,55 @@ fdirectory() {
 }
 
 
+ffext() {
+    if [ -z "$1" ]; then
+        echo "Usage: ffext <extension>"
+        echo "Example: ffext py"
+        return 1
+    fi
+
+    # Strip a leading dot if the user typed one (e.g., '.py' -> 'py')
+    local ext="${1#.}"
+
+    find . -type f -name "*.$ext"
+}
+
+
+fftype() {
+    if [ -z "$1" ]; then
+        echo "Usage: fftype <type>"
+        echo "Types available: image, video, doc, audio, archive"
+        return 1
+    fi
+
+    local type="$1"
+    local patterns=()
+
+    case "$type" in
+        image|images)
+            patterns=(-name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.gif" -o -name "*.webp" -o -name "*.svg" -o -name "*.bmp")
+            ;;
+        video|videos)
+            patterns=(-name "*.mp4" -o -name "*.mkv" -o -name "*.mov" -o -name "*.avi" -o -name "*.webm" -o -name "*.flv")
+            ;;
+        doc|docs|document|documents)
+            patterns=(-name "*.pdf" -o -name "*.docx" -o -name "*.doc" -o -name "*.txt" -o -name "*.md" -o -name "*.odt" -o -name "*.rtf")
+            ;;
+        audio)
+            patterns=(-name "*.mp3" -o -name "*.wav" -o -name "*.flac" -o -name "*.m4a" -o -name "*.aac" -o -name "*.ogg")
+            ;;
+        archive|compressed)
+            patterns=(-name "*.zip" -o -name "*.tar.gz" -o -name "*.tgz" -o -name "*.rar" -o -name "*.7z")
+            ;;
+        *)
+            echo "Unknown type: '$type'"
+            echo "Available types: image, video, doc, audio, archive"
+            return 1
+            ;;
+    esac
+
+    find . -type f \( "${patterns[@]}" \)
+}
 
 
 ## Archives and file compression

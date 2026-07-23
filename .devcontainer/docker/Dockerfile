@@ -34,6 +34,7 @@ RUN userdel -r ubuntu 2>/dev/null || true \
 FROM base AS dotfiles
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    gawk \
     lsb-release \
     python3-pip \
     python3-venv \
