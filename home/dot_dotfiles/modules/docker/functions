@@ -1,0 +1,40 @@
+# Docker helpers — sourced when the docker module is enabled.
+
+cps() {
+  docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+}
+
+dsh() {
+  if [ "$#" -lt 1 ]; then
+    printf 'Usage: dsh <container> [command]\n' >&2
+    return 2
+  fi
+  local container="$1"
+  shift
+  if [ "$#" -gt 0 ]; then
+    docker exec -it "$container" "$@"
+  elif docker exec "$container" test -x /bin/bash 2>/dev/null; then
+    docker exec -it "$container" /bin/bash
+  else
+    docker exec -it "$container" /bin/sh
+  fi
+}
+
+drun() {
+  if [ "$#" -lt 1 ]; then
+    printf 'Usage: drun <image> [command]\n' >&2
+    return 2
+  fi
+  docker run --rm -it "$@"
+}
+
+dprune() {
+  docker system df
+  printf 'Run Docker system prune? [y/N] '
+  local answer
+  read -r answer
+  case "$answer" in
+    y|Y|yes|YES) docker system prune ;;
+    *) printf 'Cancelled.\n' ;;
+  esac
+}

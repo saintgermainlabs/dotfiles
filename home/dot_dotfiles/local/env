@@ -1,0 +1,5 @@
+# Local (laptop) defaults.
+# Keep secrets and machine-specific overrides in untracked files
+# (e.g. ~/.bashrc.local or ~/.dotfiles/dot_env/.env), not here.
+
+export DOTFILES_ROLE=local

@@ -1,0 +1,86 @@
+# Common helper functions (bash and zsh).
+
+has() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+mkcd() {
+  if [ "$#" -ne 1 ]; then
+    printf 'Usage: mkcd <directory>\n' >&2
+    return 2
+  fi
+  mkdir -p -- "$1" && cd -- "$1"
+}
+
+up() {
+  local levels="${1:-1}"
+  local destination=""
+
+  case "$levels" in
+    ''|*[!0-9]*)
+      printf 'Usage: up [positive-integer]\n' >&2
+      return 2
+      ;;
+  esac
+
+  while [ "$levels" -gt 0 ]; do
+    destination="../${destination}"
+    levels=$((levels - 1))
+  done
+
+  cd -- "$destination"
+}
+
+compress() { tar -czf "${1%/}.tar.gz" "${1%/}"; }
+alias decompress='tar -xzf'
+
+extract() {
+  if [ "$#" -ne 1 ]; then
+    printf 'Usage: extract <archive>\n' >&2
+    return 2
+  fi
+
+  local archive="$1"
+  if [ ! -f "$archive" ]; then
+    printf 'File not found: %s\n' "$archive" >&2
+    return 1
+  fi
+
+  case "$archive" in
+    *.tar.bz2|*.tbz2) tar -xjf "$archive" ;;
+    *.tar.gz|*.tgz)   tar -xzf "$archive" ;;
+    *.tar.xz|*.txz)   tar -xJf "$archive" ;;
+    *.tar.zst)        tar --zstd -xf "$archive" ;;
+    *.tar)            tar -xf "$archive" ;;
+    *.bz2)            bunzip2 "$archive" ;;
+    *.gz)             gunzip "$archive" ;;
+    *.xz)             unxz "$archive" ;;
+    *.zip)            unzip "$archive" ;;
+    *.7z)             7z x "$archive" ;;
+    *)
+      printf 'Unsupported archive format: %s\n' "$archive" >&2
+      return 1
+      ;;
+  esac
+}
+
+venv() {
+  local candidate candidates=()
+  for candidate in .venv venv .env env; do
+    if [ -f "$candidate/bin/activate" ]; then
+      candidates+=("$candidate")
+    fi
+  done
+
+  if [ ${#candidates[@]} -eq 0 ]; then
+    echo "venv: No virtual environment found." >&2
+    return 1
+  elif [ ${#candidates[@]} -eq 1 ]; then
+    # shellcheck disable=SC1090
+    . "${candidates[0]}/bin/activate"
+  else
+    echo "Multiple virtual environments found:" >&2
+    printf '  %s\n' "${candidates[@]}" >&2
+    return 1
+  fi
+}

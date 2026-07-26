@@ -1,0 +1,53 @@
+# ~/.bashrc: executed by bash(1) for non-login shells.
+
+case $- in
+    *i*) ;;
+      *) return;;
+esac
+
+DF_DIR="${HOME}/.dotfiles"
+
+# mise owns PATH and tool env — activate when available.
+if command -v mise >/dev/null 2>&1; then
+  eval "$(mise activate bash)"
+fi
+
+# Common shell modules
+{{- if .modules.common }}
+for _df in "${DF_DIR}/common"/*; do
+  [ -r "$_df" ] || continue
+  # shellcheck disable=SC1090
+  . "$_df"
+done
+unset _df
+{{- end }}
+
+# Role extras
+{{- if eq .role "local" }}
+[ -r "${DF_DIR}/local/env" ] && . "${DF_DIR}/local/env"
+{{- else if eq .role "remote" }}
+[ -r "${DF_DIR}/remote/env" ] && . "${DF_DIR}/remote/env"
+{{- end }}
+
+# Optional modules (docker, etc.)
+{{ template "source-modules.tmpl" . }}
+
+# Alias definitions from ~/.bash_aliases (if present).
+if [ -f ~/.bash_aliases ]; then
+  # shellcheck disable=SC1090
+  . ~/.bash_aliases
+fi
+
+# Programmable completion
+if ! shopt -oq posix; then
+  if [ -f /usr/share/bash-completion/bash_completion ]; then
+    # shellcheck disable=SC1091
+    . /usr/share/bash-completion/bash_completion
+  elif [ -f /etc/bash_completion ]; then
+    # shellcheck disable=SC1091
+    . /etc/bash_completion
+  fi
+fi
+
+# Machine-local, untracked overrides.
+[ -r ~/.bashrc.local ] && . ~/.bashrc.local

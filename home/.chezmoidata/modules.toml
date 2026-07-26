@@ -1,0 +1,37 @@
+# Module switchboard — edit, then run `chezmoi apply`.
+# requires_gui = true modules are forced off when the host has gui = false.
+
+[modules.common]
+enabled = true
+description = "Shared shell aliases, functions, prompt"
+
+[modules.git]
+enabled = true
+description = "Git config"
+
+[modules.ssh]
+enabled = true
+description = "SSH client config"
+
+[modules.gui]
+enabled = true
+requires_gui = true
+description = "MIME defaults and other desktop config"
+
+[modules.nautilus]
+enabled = true
+requires_gui = true
+description = "Nautilus templates and config"
+
+[modules.thunar]
+enabled = false
+requires_gui = true
+description = "Thunar config (enable and disable nautilus if preferred)"
+
+[modules.docker]
+enabled = true
+description = "Docker shell helpers under ~/.dotfiles/modules/docker"
+
+[modules.mise]
+enabled = true
+description = "mise config.toml tools list only (no install scripts)"

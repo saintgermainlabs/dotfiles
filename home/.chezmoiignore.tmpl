@@ -1,0 +1,54 @@
+# Chezmoi source metadata — never apply to $HOME.
+/.chezmoi.toml.tmpl
+/.chezmoidata/
+/.chezmoiignore.tmpl
+/.chezmoitemplates/
+
+# Placeholders
+.gitkeep
+
+# macOS / editor noise
+.DS_Store
+
+# --- Module gates (dig so missing data during init does not explode) ---
+
+{{- if not (dig "git" false .modules) }}
+.gitconfig
+{{- end }}
+
+{{- if not (dig "ssh" false .modules) }}
+.ssh/config
+{{- end }}
+
+{{- if not (dig "mise" false .modules) }}
+.config/mise/
+{{- end }}
+
+{{- if not (dig "docker" false .modules) }}
+.dotfiles/modules/docker/
+{{- end }}
+
+{{- if not (dig "common" false .modules) }}
+.dotfiles/common/
+{{- end }}
+
+# GUI bundle (mimeapps + any desktop helpers)
+{{- if or (not (dig "gui" false .)) (not (dig "gui" false .modules)) }}
+.config/mimeapps.list
+{{- end }}
+
+{{- if or (not (dig "gui" false .)) (not (dig "nautilus" false .modules)) }}
+.config/nautilus/
+{{- end }}
+
+{{- if or (not (dig "gui" false .)) (not (dig "thunar" false .modules)) }}
+.config/thunar/
+{{- end }}
+
+# Role extras: only apply the matching role directory.
+{{- if ne (dig "role" "remote" .) "local" }}
+.dotfiles/local/
+{{- end }}
+{{- if ne (dig "role" "remote" .) "remote" }}
+.dotfiles/remote/
+{{- end }}

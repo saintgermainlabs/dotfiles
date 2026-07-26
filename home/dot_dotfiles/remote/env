@@ -1,0 +1,3 @@
+# Remote (headless server) defaults.
+
+export DOTFILES_ROLE=remote

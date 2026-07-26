@@ -1,0 +1,13 @@
+{{- if and .gui .modules.gui -}}
+# Managed by chezmoi (gui module). Prefer desktop defaults via xdg / app settings.
+# Keep this list small; extend as needed.
+
+[Default Applications]
+text/plain=org.gnome.TextEditor.desktop;
+text/markdown=org.gnome.TextEditor.desktop;
+{{- if .modules.thunar }}
+inode/directory=thunar.desktop;
+{{- else }}
+inode/directory=org.gnome.Nautilus.desktop;
+{{- end }}
+{{- end -}}

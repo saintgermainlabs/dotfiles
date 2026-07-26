@@ -1,0 +1,52 @@
+# AGENTS.md
+
+This repository manages personal configuration with Chezmoi only.
+Every change must be safe to re-apply with `chezmoi apply`.
+
+## Scope
+
+Chezmoi owns **dotfiles and config files**.
+
+Do **not** add:
+
+- apt / package install scripts
+- `mise install` scripts
+- PATH rewriting
+- environment bootstrapping beyond tiny role defaults
+
+mise owns tools, PATH, and tool environment. The workstation provisioner owns
+desktop app installs (VS Code, Cursor, Sublime, chezmoi binary, etc.).
+
+## Axes — never conflate these
+
+- **role**: `local` (laptop) or `remote` (headless server)
+- **gui**: boolean — whether GUI modules may apply
+
+Gate GUI paths on `.gui` (and module toggles), never on `role == "local"`.
+
+## Module toggles
+
+Edit `home/.chezmoidata/modules.toml`, then `chezmoi apply`.
+
+`.chezmoiignore.tmpl` ignores disabled modules and all GUI paths when `gui = false`.
+
+## Layout
+
+```text
+home/
+├── .chezmoidata/       # hosts + modules (never applied)
+├── .chezmoi.toml.tmpl
+├── .chezmoiignore.tmpl
+├── .chezmoitemplates/
+├── dot_config/
+├── dot_dotfiles/
+└── private_dot_ssh/
+```
+
+## Principles
+
+1. Never store secrets in the repository.
+2. Prefer templates over duplicated files.
+3. Keep host-specific data in `hosts.toml`.
+4. All changes must be idempotent under `chezmoi apply`.
+5. Prefer adding a module over growing `common/` indefinitely.

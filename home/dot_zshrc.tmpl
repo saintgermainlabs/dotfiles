@@ -1,0 +1,31 @@
+# ~/.zshrc: executed by zsh for interactive shells.
+
+DF_DIR="${HOME}/.dotfiles"
+
+# mise owns PATH and tool env — activate when available.
+if command -v mise >/dev/null 2>&1; then
+  eval "$(mise activate zsh)"
+fi
+
+# Common shell modules
+{{- if .modules.common }}
+for _df in "${DF_DIR}/common"/*; do
+  [ -r "$_df" ] || continue
+  # shellcheck disable=SC1090
+  . "$_df"
+done
+unset _df
+{{- end }}
+
+# Role extras
+{{- if eq .role "local" }}
+[ -r "${DF_DIR}/local/env" ] && . "${DF_DIR}/local/env"
+{{- else if eq .role "remote" }}
+[ -r "${DF_DIR}/remote/env" ] && . "${DF_DIR}/remote/env"
+{{- end }}
+
+# Optional modules (docker, etc.)
+{{ template "source-modules.tmpl" . }}
+
+# Machine-local, untracked overrides.
+[ -r ~/.zshrc.local ] && . ~/.zshrc.local

@@ -1,0 +1,16 @@
+# Host → role / gui mapping.
+# Unknown hostnames default to role=remote, gui=false (least privilege).
+# Override hostname during tests with DOTFILES_HOSTNAME.
+
+[hosts."god-Latitude-7390-2-in-1"]
+role = "local"
+gui = true
+
+[hosts."[ubuntu-server]
+role = "remote"
+gui = true
+
+# Example remote server (edit hostname to match):
+# [hosts."ubuntu-24"]
+# role = "remote"
+# gui = false

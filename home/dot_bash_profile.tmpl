@@ -1,0 +1,7 @@
+# ~/.bash_profile: executed by bash(1) for login shells.
+# Chain to .bashrc — all dotfiles bootstrap lives there.
+
+if [ -f "${HOME}/.bashrc" ]; then
+  # shellcheck disable=SC1090
+  . "${HOME}/.bashrc"
+fi

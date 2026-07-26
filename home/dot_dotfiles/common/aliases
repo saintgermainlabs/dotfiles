@@ -1,0 +1,56 @@
+# Common aliases (bash and zsh).
+
+# Return success when a command is installed.
+has() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+# File system — prefer eza when available.
+if has eza; then
+  _EZA='eza --color=always --icons=auto --group-directories-first'
+  alias l="$_EZA"
+  alias ll="$_EZA -l --git -h"
+  alias la="$_EZA -a"
+  alias lla="$_EZA -a -l --git -h"
+  alias ls='eza -lh --group-directories-first --icons=auto'
+  alias lt='eza --tree --level=2 --long --icons --git'
+  unset _EZA
+fi
+
+if has bat; then
+  alias cat='bat --paging=never'
+elif has batcat; then
+  alias bat='batcat'
+  alias cat='batcat --paging=never'
+fi
+
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+alias md='mkdir -p'
+alias rd='rmdir'
+
+alias grep='grep --color=auto'
+alias egrep='egrep --color=auto'
+alias fgrep='fgrep --color=auto'
+
+n() { if [ "$#" -eq 0 ]; then nvim .; else nvim "$@"; fi; }
+alias g='git'
+alias d='docker'
+
+alias gcm='git commit -m'
+alias gcam='git commit -a -m'
+alias gcad='git commit -a --amend'
+
+if has gh; then
+  alias ghpr='gh pr view --web'
+  alias ghprs='gh pr list'
+  alias ghrepo='gh repo view --web'
+fi
+
+if has lazygit; then
+  alias lzg='lazygit'
+fi
+if has lazydocker; then
+  alias lzd='lazydocker'
+fi

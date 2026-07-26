@@ -1,0 +1,33 @@
+{{- /* DOTFILES_HOSTNAME lets CI/tests render as if on another host. */ -}}
+{{- $hostname := env "DOTFILES_HOSTNAME" | default .chezmoi.hostname -}}
+{{- $hostsFile := joinPath .chezmoi.sourceDir ".chezmoidata/hosts.toml" | include | fromToml -}}
+{{- $modulesFile := joinPath .chezmoi.sourceDir ".chezmoidata/modules.toml" | include | fromToml -}}
+
+{{- $role := dig $hostname "role" "remote" $hostsFile.hosts -}}
+{{- $guiDefault := eq $role "local" -}}
+{{- $gui := dig $hostname "gui" $guiDefault $hostsFile.hosts -}}
+
+{{- /* Resolve active modules */ -}}
+{{- $active := dict -}}
+{{- range $name, $mod := $modulesFile.modules -}}
+{{-   $on := dig "enabled" false $mod -}}
+{{-   $needsGui := dig "requires_gui" false $mod -}}
+{{-   if and $on (or (not $needsGui) $gui) -}}
+{{-     $active = set $active $name true -}}
+{{-   else -}}
+{{-     $active = set $active $name false -}}
+{{-   end -}}
+{{- end -}}
+
+[data]
+    role = {{ $role | quote }}
+    gui = {{ $gui }}
+    hostname = {{ $hostname | quote }}
+    git_name = "Saint Germain Labs"
+    git_email = "saintgermainlabs@gmail.com"
+    github_user = "saintgermainlabs"
+
+[data.modules]
+{{- range $name, $val := $active }}
+    {{ $name }} = {{ $val }}
+{{- end }}

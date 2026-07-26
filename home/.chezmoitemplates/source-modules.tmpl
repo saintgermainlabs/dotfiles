@@ -1,0 +1,15 @@
+{{- /* Source enabled optional modules under ~/.dotfiles/modules/<name>/. */ -}}
+{{- range $name, $on := .modules }}
+{{- if and $on (ne $name "common") (ne $name "git") (ne $name "ssh") (ne $name "gui") (ne $name "nautilus") (ne $name "thunar") (ne $name "mise") }}
+# module: {{ $name }}
+for _df_mod in "${DF_DIR}/modules/{{ $name }}"/*; do
+  [ -r "$_df_mod" ] || continue
+  case "$_df_mod" in
+    *.md|*.txt|*.toml|*.yaml|*.yml) continue ;;
+  esac
+  # shellcheck disable=SC1090
+  . "$_df_mod"
+done
+unset _df_mod
+{{- end }}
+{{- end }}

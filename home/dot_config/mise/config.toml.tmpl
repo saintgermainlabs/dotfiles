@@ -1,0 +1,23 @@
+{{- if .modules.mise -}}
+# Managed by chezmoi (mise module) — tools list only.
+# Install/update tools with mise (not via chezmoi scripts).
+# PATH and env come from `mise activate` in the shell rc files.
+
+[tools]
+python = "latest"
+node = "lts"
+ripgrep = "latest"
+fzf = "latest"
+fd = "latest"
+bat = "latest"
+eza = "latest"
+zoxide = "latest"
+{{- if eq .role "local" }}
+lazygit = "latest"
+lazydocker = "latest"
+starship = "latest"
+{{- end }}
+
+[settings]
+experimental = true
+{{- end -}}
