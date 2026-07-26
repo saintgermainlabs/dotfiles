@@ -1,0 +1,4 @@
+.DS_Store
+*.local
+.env
+**/dot_env/.env
