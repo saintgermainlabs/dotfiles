@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+
+# Source the script '.common-functions.sh'.
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+ROOT_DIR=$(grep --only-matching "^.*scripts[^/]*" <<<"$SCRIPT_DIR")
+source "$ROOT_DIR/.common-functions.sh"
+
+# Host aliases from ~/.ssh/config (skip wildcards and git forges).
+_ssh_config_host_list() {
+    local config="${HOME}/.ssh/config"
+    local skip_re='^(github\.com|gitlab\.com|bitbucket\.org)$'
+
+    [[ -f "$config" ]] || return 1
+
+    awk '
+        /^[Hh][Oo][Ss][Tt][ \t]+/ {
+            h = $2
+            if (h == "*" || h ~ /[*?]/) next
+            print h
+        }
+    ' "$config" | while read -r host; do
+        [[ "$host" =~ $skip_re ]] && continue
+        printf '%s\n' "$host"
+    done | sort -u
+}
+
+_check_upload_dependencies() {
+    local missing=""
+    for cmd in rsync ssh; do
+        if ! _command_exists "$cmd"; then
+            missing+="$cmd "
+        fi
+    done
+    if [[ -n "$missing" ]]; then
+        local msg=""
+        msg="$(_i18n 'Required commands are not installed:')"
+        _display_error_box "$msg $missing"
+        _exit_script
+    fi
+    if _is_gui_session && ! _command_exists "zenity" && ! _command_exists "yad"; then
+        local msg=""
+        msg="$(_i18n 'A graphical dialog tool (zenity or yad) is required.')"
+        _display_error_box "$msg"
+        _exit_script
+    fi
+}
+
+# Reject empty, root, newlines, and ".." path components. Allow ~ / ~/...
+_remote_path_valid() {
+    local path=$1
+    local part=""
+
+    [[ -n "$path" ]] || return 1
+    [[ "$path" != *$'\n'* ]] || return 1
+    [[ "$path" != *$'\r'* ]] || return 1
+    [[ "$path" != "/" ]] || return 1
+
+    IFS='/' read -r -a _parts <<<"$path"
+    for part in "${_parts[@]}"; do
+        [[ "$part" == ".." ]] && return 1
+    done
+    return 0
+}
+
+# Strip trailing slashes, then ensure one trailing /.
+_normalize_remote_dir() {
+    local path=$1
+    path="${path%/}"
+    [[ -n "$path" ]] || return 1
+    printf '%s/' "$path"
+}
+
+# Record a real failure for Errors.log and show it (avoid _display_text_box —
+# it consolidates TEMP_DIR_LOGS first and can hide the actual message).
+_fail_upload() {
+    local summary=$1
+    local detail=${2:-}
+
+    _close_wait_box
+
+    # Drop any empty/stale temp logs so consolidate shows only this failure.
+    rm -f -- "$TEMP_DIR_LOGS"/* 2>/dev/null
+
+    if [[ -z "$detail" ]]; then
+        detail="$(_i18n '(No stderr/stdout captured.)')"
+    fi
+
+    _log_error "$summary" "" "$detail" ""
+    _logs_consolidate ""
+}
+
+_main() {
+    local input_files=""
+    local hosts=""
+    local host=""
+    local remote_dir=""
+    local remote_dir_display=""
+    local err_msg=""
+    local sources=()
+    local item=""
+    local item_count=0
+    local confirm_msg=""
+    local cmd_output=""
+    local cmd_rc=0
+
+    _check_upload_dependencies
+    _display_wait_box
+    input_files=$(_get_files "par_type=all")
+
+    if (($(_get_items_count "$input_files") == 0)); then
+        err_msg="$(_i18n 'No files or folders selected.')"
+        _display_error_box "$err_msg"
+        _exit_script
+    fi
+
+    hosts=$(_ssh_config_host_list)
+    if [[ -z "$hosts" ]]; then
+        err_msg="$(_i18n 'No usable SSH hosts found in ~/.ssh/config.')"
+        _display_error_box "$err_msg"
+        _exit_script
+    fi
+
+    _close_wait_box
+
+    local select_msg=""
+    select_msg="$(_i18n 'Select the destination SSH host:')"
+    host=$(_display_select_box "$hosts" "--column:Host" "radiolist" \
+        "first_if_one" "$select_msg")
+    if [[ -z "$host" ]]; then
+        _exit_script
+    fi
+
+    remote_dir_display=$(_display_input_text_box \
+        "$(_i18n 'Remote directory on the server:')" "~/uploads")
+    if ! _remote_path_valid "$remote_dir_display"; then
+        err_msg="$(_i18n 'Invalid remote directory.')"
+        _display_error_box "$err_msg"
+        _exit_script
+    fi
+
+    remote_dir=$(_normalize_remote_dir "$remote_dir_display") || {
+        err_msg="$(_i18n 'Invalid remote directory.')"
+        _display_error_box "$err_msg"
+        _exit_script
+    }
+
+    while IFS= read -r item; do
+        [[ -z "$item" ]] && continue
+        sources+=("$item")
+    done < <(tr "$FIELD_SEPARATOR" "\n" <<<"$input_files")
+    item_count=${#sources[@]}
+
+    if ((item_count == 0)); then
+        err_msg="$(_i18n 'No files or folders selected.')"
+        _display_error_box "$err_msg"
+        _exit_script
+    fi
+
+    # Preflight: ensure remote path exists as a directory (create parents if needed).
+    cmd_output=$(
+        ssh -o BatchMode=yes -o ConnectTimeout=15 "$host" \
+            "mkdir -p -- $(printf '%q' "${remote_dir%/}") && test -d $(printf '%q' "${remote_dir%/}")" \
+            2>&1
+    )
+    cmd_rc=$?
+    if ((cmd_rc != 0)); then
+        _fail_upload \
+            "$(_i18n 'Could not create or access the remote directory.') host=$host path=${remote_dir%/} rc=$cmd_rc" \
+            "$cmd_output"
+    fi
+
+    confirm_msg="$(_i18n 'Upload with rsync (no remote deletes)?')"
+    confirm_msg+=$'\n\n'
+    confirm_msg+="$(_i18n 'Host:')"
+    confirm_msg+=" $host"$'\n'
+    confirm_msg+="$(_i18n 'Remote directory:')"
+    confirm_msg+=" ${remote_dir%/}"$'\n'
+    confirm_msg+="$(_i18n 'Items:')"
+    confirm_msg+=" $item_count"
+    if ! _display_question_box "$confirm_msg"; then
+        _exit_script
+    fi
+
+    _display_wait_box_message "$(_i18n 'Uploading via rsync...')" "0"
+
+    # Never pass --delete / --delete-after / --force.
+    cmd_output=$(
+        rsync -a --protect-args --partial \
+            "${sources[@]}" "${host}:${remote_dir}" 2>&1
+    )
+    cmd_rc=$?
+    if ((cmd_rc != 0)); then
+        _fail_upload \
+            "$(_i18n 'rsync failed.') host=$host dest=${remote_dir%/} items=$item_count rc=$cmd_rc" \
+            "$cmd_output"
+    fi
+
+    _close_wait_box
+    _display_info_box "$(_i18n 'Upload finished successfully.')"
+}
+
+_main "$@"
