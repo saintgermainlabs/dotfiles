@@ -42,6 +42,7 @@
 
 {{- if or (not (dig "gui" false .)) (not (dig "nautilus" false .modules)) }}
 .config/nautilus/
+.local/share/nautilus/
 {{- end }}
 
 {{- if or (not (dig "gui" false .)) (not (dig "thunar" false .modules)) }}
