@@ -5,17 +5,54 @@ Host *
 {{- if eq .role "local" }}
     IdentityAgent ~/.1password/agent.sock
 
-# Git forges — prefer 1Password SSH agent when available.
+# GitHub
 Host github.com
     HostName github.com
     User git
     IdentitiesOnly yes
     IdentityAgent ~/.1password/agent.sock
 
+# GitLab
 Host gitlab.com
     HostName gitlab.com
     User git
     IdentitiesOnly yes
     IdentityAgent ~/.1password/agent.sock
+
+# Bitbucket
+Host bitbucket.org
+    HostName bitbucket.org
+    User git
+    IdentitiesOnly yes
+    IdentityAgent ~/.1password/agent.sock
+
+# Coolify
+Host 10.20.0.*
+    IdentityFile ~/.ssh/id_ed25519_coolify
+    IdentitiesOnly yes
+    User ubuntu
+
+Host 100.70.96.19
+    IdentityFile ~/.ssh/id_ed25519_server
+    User root
+
+Host antigravity
+    HostName 100.70.96.19
+    IdentityFile ~/.ssh/antigravity_key
+    IdentitiesOnly yes
+    User antigravity-admin
+
+Host ubuntu
+    HostName 100.70.96.19
+    IdentityFile ~/.ssh/ubuntu_server
+    IdentitiesOnly yes
+    User dom
 {{- end }}
-{{- end -}}
+
+{{- if (env "SSH_HETZNER_IP") }}
+Host hetzner
+    HostName {{ env "SSH_HETZNER_IP" }}
+    User {{ env "SSH_HETZNER_USER" }}
+    IdentityFile {{ env "SSH_HETZNER_KEY" }}
+{{- end }}
+{{- end }}
