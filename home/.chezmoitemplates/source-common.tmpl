@@ -1,0 +1,10 @@
+{{- /* Source common files in fixed order (init is sourced later by the rc). */ -}}
+{{- if .modules.common }}
+# common: shell -> aliases -> functions -> prompt -> help (init comes after modules)
+for _df in shell aliases functions prompt help; do
+  [ -r "${DF_DIR}/common/${_df}" ] || continue
+  # shellcheck disable=SC1090
+  . "${DF_DIR}/common/${_df}"
+done
+unset _df
+{{- end }}

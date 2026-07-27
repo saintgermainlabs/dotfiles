@@ -34,4 +34,4 @@ description = "Docker shell helpers under ~/.dotfiles/modules/docker"
 
 [modules.mise]
 enabled = true
-description = "mise config.toml tools list only (no install scripts)"
+description = "Additive mise tools via ~/.config/mise/conf.d/dotfiles.toml (never overwrites config.toml)"

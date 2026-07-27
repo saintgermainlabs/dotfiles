@@ -1,0 +1,25 @@
+# Bash-only shell options (skipped under zsh).
+if [ -z "${BASH_VERSION:-}" ]; then
+  return 0 2>/dev/null || exit 0
+fi
+
+# History control
+shopt -s histappend
+HISTCONTROL=ignoreboth
+HISTSIZE=32768
+HISTFILESIZE="${HISTSIZE}"
+
+# Autocompletion
+if [ -f /usr/share/bash-completion/bash_completion ]; then
+  # shellcheck disable=SC1091
+  . /usr/share/bash-completion/bash_completion
+fi
+
+# Prefer user/local bins; mise activate (in common/init) adjusts tool PATH later.
+export PATH="./bin:$HOME/.local/bin:$HOME/.local/share/omakub/bin:$PATH"
+set +h
+
+export OMAKUB_PATH="$HOME/.local/share/omakub"
+
+# Readline config applied via ~/.inputrc (chezmoi: dot_inputrc)
+export INPUTRC="${HOME}/.inputrc"

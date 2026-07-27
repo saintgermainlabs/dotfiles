@@ -8,49 +8,74 @@ has() {
 # File system — prefer eza when available.
 if has eza; then
   _EZA='eza --color=always --icons=auto --group-directories-first'
+  # Short eza listing with icons.
   alias l="$_EZA"
+  # Long eza listing with git status.
   alias ll="$_EZA -l --git -h"
+  # eza listing including hidden files.
   alias la="$_EZA -a"
+  # Long eza listing including hidden files.
   alias lla="$_EZA -a -l --git -h"
+  # eza as ls replacement.
   alias ls='eza -lh --group-directories-first --icons=auto'
+  # Tree view two levels deep.
   alias lt='eza --tree --level=2 --long --icons --git'
   unset _EZA
 fi
 
 if has bat; then
+  # Syntax-highlighted cat via bat.
   alias cat='bat --paging=never'
 elif has batcat; then
+  # Ubuntu bat package name.
   alias bat='batcat'
+  # Syntax-highlighted cat via batcat.
   alias cat='batcat --paging=never'
 fi
 
+# Go up one directory.
 alias ..='cd ..'
+# Go up two directories.
 alias ...='cd ../..'
+# Go up three directories.
 alias ....='cd ../../..'
+# Create parent directories as needed.
 alias md='mkdir -p'
+# Remove an empty directory.
 alias rd='rmdir'
 
 alias grep='grep --color=auto'
 alias egrep='egrep --color=auto'
 alias fgrep='fgrep --color=auto'
 
+# Open Neovim on a path, or the current directory when called with no args.
 n() { if [ "$#" -eq 0 ]; then nvim .; else nvim "$@"; fi; }
+# Shorthand for git.
 alias g='git'
+# Shorthand for docker.
 alias d='docker'
 
+# Commit with a message.
 alias gcm='git commit -m'
+# Stage all changes and commit with a message.
 alias gcam='git commit -a -m'
+# Stage all changes and amend the previous commit.
 alias gcad='git commit -a --amend'
 
 if has gh; then
+  # Open the current PR in the browser.
   alias ghpr='gh pr view --web'
+  # List pull requests.
   alias ghprs='gh pr list'
+  # Open the repo in the browser.
   alias ghrepo='gh repo view --web'
 fi
 
 if has lazygit; then
+  # Launch lazygit.
   alias lzg='lazygit'
 fi
 if has lazydocker; then
+  # Launch lazydocker.
   alias lzd='lazydocker'
 fi

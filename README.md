@@ -4,6 +4,8 @@ Simplified personal dotfiles managed with [Chezmoi](https://www.chezmoi.io/).
 Tool installs, PATH, and environment variables are owned by [mise](https://mise.jdx.dev/)
 (and the workstation provisioner), not by this repo.
 
+Chezmoi only writes an **additive** file at `~/.config/mise/conf.d/dotfiles.toml`.
+Your existing `~/.config/mise/config.toml` is left alone.
 ## Axes
 
 | Axis | Values | Meaning |

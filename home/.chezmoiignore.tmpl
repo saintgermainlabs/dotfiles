@@ -20,8 +20,11 @@
 .ssh/config
 {{- end }}
 
+# Never overwrite the hand-written / omakub base mise config.
+.config/mise/config.toml
+
 {{- if not (dig "mise" false .modules) }}
-.config/mise/
+.config/mise/conf.d/
 {{- end }}
 
 {{- if not (dig "docker" false .modules) }}

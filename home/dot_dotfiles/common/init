@@ -1,0 +1,44 @@
+# Late shell integrations — sourced last from bashrc/zshrc.
+# Order matters: mise first (PATH), then zoxide/fzf/starship.
+
+if [ -n "${BASH_VERSION:-}" ]; then
+  _df_shell=bash
+elif [ -n "${ZSH_VERSION:-}" ]; then
+  _df_shell=zsh
+else
+  _df_shell=
+fi
+
+if [ -n "${_df_shell}" ] && command -v mise >/dev/null 2>&1; then
+  eval "$(mise activate "${_df_shell}")"
+fi
+
+if [ -n "${_df_shell}" ] && command -v zoxide >/dev/null 2>&1; then
+  eval "$(zoxide init "${_df_shell}")"
+fi
+
+if [ -n "${BASH_VERSION:-}" ] && command -v fzf >/dev/null 2>&1; then
+  if [ -f /usr/share/bash-completion/completions/fzf ]; then
+    # shellcheck disable=SC1091
+    . /usr/share/bash-completion/completions/fzf
+  fi
+  if [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
+    # shellcheck disable=SC1091
+    . /usr/share/doc/fzf/examples/key-bindings.bash
+  fi
+elif [ -n "${ZSH_VERSION:-}" ] && command -v fzf >/dev/null 2>&1; then
+  if [ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]; then
+    # shellcheck disable=SC1091
+    . /usr/share/doc/fzf/examples/key-bindings.zsh
+  fi
+  if [ -f /usr/share/doc/fzf/examples/completion.zsh ]; then
+    # shellcheck disable=SC1091
+    . /usr/share/doc/fzf/examples/completion.zsh
+  fi
+fi
+
+if [ -n "${_df_shell}" ] && command -v starship >/dev/null 2>&1; then
+  eval "$(starship init "${_df_shell}")"
+fi
+
+unset _df_shell

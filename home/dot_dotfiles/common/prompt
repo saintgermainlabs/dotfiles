@@ -1,14 +1,7 @@
-# Simple prompt fallback when starship (via mise) is not active.
-# bash only — zsh users typically use starship or zsh themes via mise.
+# Simple prompt fallback when starship (via common/init) is not active.
+# bash only — zsh falls back to its default prompt until starship loads.
 if [ -n "${BASH_VERSION:-}" ]; then
   force_color_prompt=yes
   color_prompt=yes
   PS1='\[\e]0;\w\a\]\u@\h:\w\$ '
-fi
-
-if command -v starship >/dev/null 2>&1; then
-  case "$(basename "${SHELL:-}")" in
-    bash) eval "$(starship init bash)" ;;
-    zsh)  eval "$(starship init zsh)" ;;
-  esac
 fi

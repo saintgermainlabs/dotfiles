@@ -2,20 +2,7 @@
 
 DF_DIR="${HOME}/.dotfiles"
 
-# mise owns PATH and tool env — activate when available.
-if command -v mise >/dev/null 2>&1; then
-  eval "$(mise activate zsh)"
-fi
-
-# Common shell modules
-{{- if .modules.common }}
-for _df in "${DF_DIR}/common"/*; do
-  [ -r "$_df" ] || continue
-  # shellcheck disable=SC1090
-  . "$_df"
-done
-unset _df
-{{- end }}
+{{ template "source-common.tmpl" . }}
 
 # Role extras
 {{- if eq .role "local" }}
@@ -26,6 +13,11 @@ unset _df
 
 # Optional modules (docker, etc.)
 {{ template "source-modules.tmpl" . }}
+
+# Late init last among managed files: mise, zoxide, fzf, starship
+{{- if .modules.common }}
+[ -r "${DF_DIR}/common/init" ] && . "${DF_DIR}/common/init"
+{{- end }}
 
 # Machine-local, untracked overrides.
 [ -r ~/.zshrc.local ] && . ~/.zshrc.local

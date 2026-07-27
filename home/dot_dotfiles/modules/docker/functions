@@ -1,9 +1,12 @@
 # Docker helpers — sourced when the docker module is enabled.
 
+# List running containers with name, status, and ports.
 cps() {
   docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 }
 
+# Open a shell (or run a command) inside a container.
+# Usage: dsh <container> [command]
 dsh() {
   if [ "$#" -lt 1 ]; then
     printf 'Usage: dsh <container> [command]\n' >&2
@@ -20,6 +23,8 @@ dsh() {
   fi
 }
 
+# Run an interactive container and remove it on exit.
+# Usage: drun <image> [command]
 drun() {
   if [ "$#" -lt 1 ]; then
     printf 'Usage: drun <image> [command]\n' >&2
@@ -28,6 +33,7 @@ drun() {
   docker run --rm -it "$@"
 }
 
+# Show docker disk usage, then optionally prune.
 dprune() {
   docker system df
   printf 'Run Docker system prune? [y/N] '

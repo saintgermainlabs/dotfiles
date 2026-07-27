@@ -17,6 +17,13 @@ Do **not** add:
 mise owns tools, PATH, and tool environment. The workstation provisioner owns
 desktop app installs (VS Code, Cursor, Sublime, chezmoi binary, etc.).
 
+### mise config split
+
+- `~/.config/mise/config.toml` — hand-written / Omakub base; **never** managed by chezmoi
+- `~/.config/mise/conf.d/dotfiles.toml` — chezmoi-managed additive tools only
+
+Do not add a template that writes `config.toml`; that would wipe existing tools.
+
 ## Axes — never conflate these
 
 - **role**: `local` (laptop) or `remote` (headless server)
