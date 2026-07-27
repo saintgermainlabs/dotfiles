@@ -1,6 +1,6 @@
 {{- /* Source enabled optional modules under ~/.dotfiles/modules/<name>/. */ -}}
 {{- range $name, $on := .modules }}
-{{- if and $on (ne $name "common") (ne $name "git") (ne $name "ssh") (ne $name "gui") (ne $name "nautilus") (ne $name "thunar") (ne $name "mise") }}
+{{- if and $on (ne $name "common") (ne $name "git") (ne $name "ssh") (ne $name "gui") (ne $name "nautilus") (ne $name "nautilus_extensions") (ne $name "thunar") (ne $name "mise") }}
 # module: {{ $name }}
 for _df_mod in "${DF_DIR}/modules/{{ $name }}"/*; do
   [ -r "$_df_mod" ] || continue

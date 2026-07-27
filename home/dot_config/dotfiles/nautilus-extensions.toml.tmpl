@@ -1,0 +1,24 @@
+{{- if .modules.nautilus_extensions -}}
+{{- $extFile := joinPath .chezmoi.sourceDir ".chezmoidata/nautilus-extensions.toml" | include | fromToml -}}
+{{- $packages := list -}}
+{{- range $name, $ext := $extFile.extensions -}}
+{{-   $include := or (dig "required" false $ext) (dig "enabled" false $ext) -}}
+{{-   if $include -}}
+{{-     $pkg := dig "package" "" $ext -}}
+{{-     if $pkg -}}
+{{-       $packages = append $packages $pkg -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+# Managed by chezmoi — PPA manifest for the workstation provisioner.
+# Upstream: https://github.com/ToFpon/Nautilus-Extensions
+# Install: add PPA, apt install packages, run nautilus-extensions-tof-link, nautilus -q
+
+ppa = {{ dig "id" "" $extFile.ppa | quote }}
+
+packages = [
+{{- range $pkg := $packages | uniq | sortAlpha }}
+    {{ $pkg | quote }},
+{{- end }}
+]
+{{- end -}}

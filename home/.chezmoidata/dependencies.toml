@@ -38,3 +38,20 @@ description = "Nautilus scripts (clipboard uses session-specific system packages
 [dependencies.nautilus.system]
 wl-clipboard = "Wayland clipboard (wl-paste / wl-copy)"
 xclip = "X11 clipboard"
+
+[dependencies.nautilus_extensions]
+requires_gui = true
+description = "ToFpon Nautilus Python extensions (PPA; see ~/.config/dotfiles/nautilus-extensions.toml)"
+
+[dependencies.nautilus_extensions.system]
+python3-nautilus = "Nautilus Python extension API"
+python3-gi = "PyGObject"
+gir1.2-gtk-4.0 = "GTK 4 introspection"
+gir1.2-adw-1 = "Libadwaita introspection"
+gir1.2-nautilus-4.0 = "Nautilus 4 introspection"
+ghostscript = "PDF tools (optional extensions)"
+ffmpeg = "Video/audio tools (optional extensions)"
+p7zip-full = "Archive tools (extract-here, archive-browser)"
+unrar = "RAR archives (extract-here)"
+poppler-utils = "PDF utilities"
+ripgrep = "Search content extension (also in mise when enabled)"

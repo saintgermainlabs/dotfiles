@@ -20,6 +20,12 @@ then run `chezmoi apply`.
 
 Examples: keep `nautilus` on and `thunar` off, or the reverse.
 
+**ToFpon Nautilus extensions (PPA):** curate packages in
+[`home/.chezmoidata/nautilus-extensions.toml`](home/.chezmoidata/nautilus-extensions.toml),
+enable `modules.nautilus_extensions`, then `chezmoi apply`. The rendered manifest at
+`~/.config/dotfiles/nautilus-extensions.toml` is consumed by the workstation provisioner
+(or install manually from the [upstream README](https://github.com/ToFpon/Nautilus-Extensions)).
+
 ## Quick start
 
 ```bash

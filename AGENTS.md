@@ -37,16 +37,25 @@ Edit `home/.chezmoidata/modules.toml`, then `chezmoi apply`.
 
 `.chezmoiignore.tmpl` ignores disabled modules and all GUI paths when `gui = false`.
 
+## ToFpon Nautilus extensions (PPA)
+
+Python extensions from [ToFpon/Nautilus-Extensions](https://github.com/ToFpon/Nautilus-Extensions) are **not** vendored in this repo. Toggle packages in [`home/.chezmoidata/nautilus-extensions.toml`](home/.chezmoidata/nautilus-extensions.toml) and enable [`modules.nautilus_extensions`](home/.chezmoidata/modules.toml). Chezmoi renders `~/.config/dotfiles/nautilus-extensions.toml` for the **workstation provisioner** (PPA + `apt install` + `nautilus-extensions-tof-link`).
+
+Separate from **cfgnunes** bash scripts under `modules.nautilus` (`~/.local/share/nautilus/scripts/`). Both can be enabled independently.
+
+Do not add apt/PPA install scripts to chezmoi. Extension enable/disable at runtime is owned by upstream **Extensions Manager** (`~/.local/share/nautilus-python/extensions/disabled/`).
+
 ## Layout
 
 ```text
 home/
-├── .chezmoidata/       # hosts + modules (never applied)
+├── .chezmoidata/       # hosts + modules + dependencies + nautilus-extensions (never applied)
 ├── .chezmoi.toml.tmpl
 ├── .chezmoiignore.tmpl
 ├── .chezmoitemplates/
 ├── dot_config/
 ├── dot_dotfiles/
+├── dot_local/          # cfgnunes nautilus scripts (modules.nautilus)
 └── private_dot_ssh/
 ```
 

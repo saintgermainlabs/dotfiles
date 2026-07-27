@@ -1,0 +1,93 @@
+# ToFpon Nautilus Python extensions — PPA package manifest (curated).
+# Chezmoi renders enabled entries into ~/.config/dotfiles/nautilus-extensions.toml
+# for the workstation provisioner (apt install). Not applied verbatim to $HOME.
+#
+# enabled  — include in manifest when modules.nautilus_extensions is on
+# required — always included when the module is on (even if enabled = false)
+# package  — Debian package name from ppa:nourpon/nautilus-extensions
+
+[ppa]
+id = "ppa:nourpon/nautilus-extensions"
+
+[extensions.common]
+package = "nautilus-extensions-tof-common"
+enabled = true
+required = true
+
+[extensions.manager]
+package = "nautilus-extensions-manager"
+enabled = true
+
+[extensions.dual-panel]
+package = "nautilus-dual-panel"
+enabled = true
+
+[extensions.search-content]
+package = "nautilus-search-content"
+enabled = true
+notes = "Uses ripgrep when available (see dependencies.mise)"
+
+[extensions.extract-here]
+package = "nautilus-extract-here"
+enabled = true
+
+# Optional — enable in this file, then chezmoi apply + provisioner install
+[extensions.column-browser]
+package = "nautilus-column-browser"
+enabled = false
+
+[extensions.archive-browser]
+package = "nautilus-archive-browser"
+enabled = false
+
+[extensions.preview-panel]
+package = "nautilus-preview-panel"
+enabled = false
+
+[extensions.deb-installer]
+package = "nautilus-deb-installer"
+enabled = false
+
+[extensions.video-to-audio]
+package = "nautilus-video-to-audio"
+enabled = false
+
+[extensions.compress-pdf]
+package = "nautilus-compress-pdf"
+enabled = false
+
+[extensions.merge-pdf]
+package = "nautilus-merge-pdf"
+enabled = false
+
+[extensions.watermark-pdf]
+package = "nautilus-watermark-pdf"
+enabled = false
+
+[extensions.annotate-image]
+package = "nautilus-annotate-image"
+enabled = false
+
+[extensions.duration-column]
+package = "nautilus-duration-column"
+enabled = false
+
+[extensions.cut-dim]
+package = "nautilus-cut-dim"
+enabled = false
+
+[extensions.edit-gedit]
+package = "nautilus-edit-gedit"
+enabled = false
+
+[extensions.folder-color-revival]
+package = "nautilus-folder-color-revival"
+enabled = false
+
+[extensions.hidden-dim-icon]
+package = "nautilus-hidden-dim-icon"
+enabled = false
+
+[extensions.hidden-dim-all]
+package = "nautilus-hidden-dim-all"
+enabled = false

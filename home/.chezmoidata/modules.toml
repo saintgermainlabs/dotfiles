@@ -21,7 +21,12 @@ description = "MIME defaults and other desktop config"
 [modules.nautilus]
 enabled = true
 requires_gui = true
-description = "Nautilus templates and config"
+description = "Nautilus templates, config, and cfgnunes scripts"
+
+[modules.nautilus_extensions]
+enabled = true
+requires_gui = true
+description = "ToFpon Nautilus Python extensions (PPA manifest; provisioner installs)"
 
 [modules.thunar]
 enabled = false
