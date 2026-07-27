@@ -18,6 +18,7 @@ bat = "latest"
 eza = "latest"
 zoxide = "latest"
 bats = "latest"
+7zip = "latest"
 
 [dependencies.mise.roles.local]
 lazygit = "latest"
