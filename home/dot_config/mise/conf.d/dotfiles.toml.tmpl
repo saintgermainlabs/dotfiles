@@ -2,17 +2,11 @@
 # Managed by chezmoi — additive mise config.
 # Does NOT replace ~/.config/mise/config.toml (hand-written / omakub base).
 # mise merges this file from conf.d with your base config.toml.
+# Tools come from home/.chezmoidata/dependencies.toml (enabled modules).
 
 [tools]
-ripgrep = "latest"
-fzf = "latest"
-fd = "latest"
-bat = "latest"
-eza = "latest"
-zoxide = "latest"
-{{- if eq .role "local" }}
-lazygit = "latest"
-lazydocker = "latest"
-starship = "latest"
+{{- $tools := dig "mise_tools" dict . }}
+{{- range $name := $tools | keys | sortAlpha }}
+{{ $name }} = {{ index $tools $name | quote }}
 {{- end }}
 {{- end -}}

@@ -1,0 +1,39 @@
+# Mise tool dependencies per dotfiles module.
+# Rendered into ~/.config/mise/conf.d/dotfiles.toml when modules.mise is enabled
+# and the owning module is active (respecting gui + requires_gui).
+#
+# tools.*     — mise [tools] entries (name = version; "latest" is fine)
+# roles.<role> — extra tools only when host role matches (local | remote)
+# requires_gui — skip this block when host gui = false (defaults false)
+# system      — OS packages not installable via mise (documentation / provisioner)
+
+[dependencies.mise]
+description = "Baseline CLI stack for dotfiles (requires modules.mise)"
+
+[dependencies.mise.tools]
+ripgrep = "latest"
+fzf = "latest"
+fd = "latest"
+bat = "latest"
+eza = "latest"
+zoxide = "latest"
+bats = "latest"
+
+[dependencies.mise.roles.local]
+lazygit = "latest"
+lazydocker = "latest"
+starship = "latest"
+
+[dependencies.docker]
+description = "Docker helpers module"
+
+[dependencies.docker.roles.local]
+lazydocker = "latest"
+
+[dependencies.nautilus]
+requires_gui = true
+description = "Nautilus scripts (clipboard uses session-specific system packages)"
+
+[dependencies.nautilus.system]
+wl-clipboard = "Wayland clipboard (wl-paste / wl-copy)"
+xclip = "X11 clipboard"

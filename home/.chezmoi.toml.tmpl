@@ -19,6 +19,30 @@
 {{-   end -}}
 {{- end -}}
 
+{{- $depsFile := joinPath .chezmoi.sourceDir ".chezmoidata/dependencies.toml" | include | fromToml -}}
+{{- $miseTools := dict -}}
+{{- if dig "mise" false $active -}}
+{{-   $mods := list -}}
+{{-   range $name, $on := $active -}}
+{{-     if $on }}{{ $mods = append $mods $name }}{{ end -}}
+{{-   end -}}
+{{-   range $modName := $mods | sortAlpha -}}
+{{-     $dep := index $depsFile.dependencies $modName -}}
+{{-     if $dep -}}
+{{-       $depNeedsGui := dig "requires_gui" false $dep -}}
+{{-       if not (and $depNeedsGui (not $gui)) -}}
+{{-         range $t, $v := dig "tools" dict $dep -}}
+{{-           $miseTools = set $miseTools $t $v -}}
+{{-         end -}}
+{{-         $roleTools := dig $role dict (dig "roles" dict $dep) -}}
+{{-         range $t, $v := $roleTools -}}
+{{-           $miseTools = set $miseTools $t $v -}}
+{{-         end -}}
+{{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+
 [data]
     role = {{ $role | quote }}
     gui = {{ $gui }}
@@ -30,4 +54,9 @@
 [data.modules]
 {{- range $name, $val := $active }}
     {{ $name }} = {{ $val }}
+{{- end }}
+
+[data.mise_tools]
+{{- range $name := $miseTools | keys | sortAlpha }}
+    {{ $name }} = {{ index $miseTools $name | quote }}
 {{- end }}

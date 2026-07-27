@@ -18,6 +18,10 @@ Your existing `~/.config/mise/config.toml` is left alone.
 Toggle modules in [`home/.chezmoidata/modules.toml`](home/.chezmoidata/modules.toml),
 then run `chezmoi apply`.
 
+Mise tool versions for enabled modules are declared in
+[`home/.chezmoidata/dependencies.toml`](home/.chezmoidata/dependencies.toml)
+and rendered into `conf.d/dotfiles.toml` when the `mise` module is on.
+
 Examples: keep `nautilus` on and `thunar` off, or the reverse.
 
 ## Quick start
