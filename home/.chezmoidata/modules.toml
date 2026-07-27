@@ -21,7 +21,7 @@ description = "MIME defaults and other desktop config"
 [modules.nautilus]
 enabled = true
 requires_gui = true
-description = "Nautilus templates and config"
+description = "Nautilus templates, config, and scripts under ~/.local/share/nautilus"
 
 [modules.thunar]
 enabled = false

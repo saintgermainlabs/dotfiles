@@ -47,8 +47,19 @@ home/
 ├── .chezmoitemplates/
 ├── dot_config/
 ├── dot_dotfiles/
+├── dot_local/          # e.g. nautilus scripts (GUI / modules.nautilus)
 └── private_dot_ssh/
 ```
+
+### Nautilus scripts (cfgnunes)
+
+Vendor selected categories from [cfgnunes/nautilus-scripts](https://github.com/cfgnunes/nautilus-scripts)
+into `home/dot_local/share/nautilus/scripts/`:
+
+- Keep upstream `.common-functions.sh` as `executable_dot_common-functions.sh`
+- Keep each action as `executable_<Script Name>` (spaces allowed)
+- Start with `Clipboard/`; add more category dirs the same way when needed
+- Do **not** run upstream `install.sh` — chezmoi owns the install path
 
 ## Principles
 
