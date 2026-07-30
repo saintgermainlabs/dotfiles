@@ -45,6 +45,12 @@ Separate from **cfgnunes** bash scripts under `modules.nautilus` (`~/.local/shar
 
 Do not add apt/PPA install scripts to chezmoi. Extension enable/disable at runtime is owned by upstream **Extensions Manager** (`~/.local/share/nautilus-python/extensions/disabled/`).
 
+### Optional shell modules (`~/.dotfiles/modules/<name>/`)
+
+Toggle in `modules.toml`. Chezmoi applies the directory; bash/zsh load **`module.sh`** when present (otherwise `functions.sh` / `aliases.sh`, or legacy `functions` for docker). **`install.sh` is not sourced** — run from the workstation provisioner or manually. Document mise/apt deps in `dependencies.toml`; render CLI tools into `conf.d/dotfiles.toml` when `modules.mise` is on.
+
+Example: `hashicorp-vault/` with `module.sh`, `functions.sh`, `aliases.sh`, `install.sh`, `vault.env.example`, `README.md`.
+
 ## Layout
 
 ```text

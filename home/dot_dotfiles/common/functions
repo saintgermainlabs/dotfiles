@@ -94,3 +94,49 @@ venv() {
     return 1
   fi
 }
+
+
+# SSH Related Functions
+
+# Generate a new SSH deploy key
+new_deploy_key() {
+    local key_name="$1"
+    local key_dir="$HOME/.ssh/deploy-keys"
+
+    # Validate argument
+    if [ -z "$key_name" ]; then
+        echo "Error: Please provide a name for the deploy key."
+        echo "Usage: new_deploy_key <key-name>"
+        return 1
+    fi
+
+    local key_path="$key_dir/$key_name"
+
+    # Ensure the deploy-keys directory exists with correct permissions (700)
+    if [ ! -d "$key_dir" ]; then
+        echo "Creating directory: $key_dir"
+        mkdir -p "$key_dir"
+        chmod 700 "$key_dir"
+    fi
+
+    # Check if key already exists
+    if [ -f "$key_path" ]; then
+        echo "Error: Key already exists at $key_path"
+        return 1
+    fi
+
+    # Generate the Ed25519 SSH key (no passphrase for automated deployments)
+    echo "Generating SSH key: $key_path"
+    ssh-keygen -t ed25519 -C "$key_name-deploy-key" -f "$key_path" -N ""
+
+    # Set strict permissions on the private key (600)
+    chmod 600 "$key_path"
+
+    echo ""
+    echo "=========================================="
+    echo " Success! Here is your PUBLIC key:"
+    echo "=========================================="
+    cat "${key_path}.pub"
+    echo "=========================================="
+    echo "Private key saved to: $key_path"
+}

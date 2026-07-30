@@ -31,6 +31,10 @@
 .dotfiles/modules/docker/
 {{- end }}
 
+{{- if not (dig "hashicorp-vault" false .modules) }}
+.dotfiles/modules/hashicorp-vault/
+{{- end }}
+
 {{- if not (dig "common" false .modules) }}
 .dotfiles/common/
 {{- end }}

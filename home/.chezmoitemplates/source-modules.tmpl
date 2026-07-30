@@ -1,15 +1,17 @@
-{{- /* Source enabled optional modules under ~/.dotfiles/modules/<name>/. */ -}}
+{{- /* Optional modules under ~/.dotfiles/modules/<name>/.
+     Prefer module.sh (loads functions + interactive aliases). Else functions.sh,
+     aliases.sh, or legacy functions (docker). install.sh/README/config not sourced. */ -}}
+{{- $skip := list "common" "git" "ssh" "gui" "nautilus" "nautilus_extensions" "thunar" "mise" -}}
 {{- range $name, $on := .modules }}
-{{- if and $on (ne $name "common") (ne $name "git") (ne $name "ssh") (ne $name "gui") (ne $name "nautilus") (ne $name "nautilus_extensions") (ne $name "thunar") (ne $name "mise") }}
+{{- if and $on (not (has $name $skip)) }}
 # module: {{ $name }}
-for _df_mod in "${DF_DIR}/modules/{{ $name }}"/*; do
-  [ -r "$_df_mod" ] || continue
-  case "$_df_mod" in
-    *.md|*.txt|*.toml|*.yaml|*.yml) continue ;;
-  esac
-  # shellcheck disable=SC1090
-  . "$_df_mod"
-done
-unset _df_mod
+_df_mod="${DF_DIR}/modules/{{ $name }}"
+if [ -r "${_df_mod}/module.sh" ]; then
+  . "${_df_mod}/module.sh"
+else
+  [ -r "${_df_mod}/functions.sh" ] && . "${_df_mod}/functions.sh"
+  [ -r "${_df_mod}/aliases.sh" ] && . "${_df_mod}/aliases.sh"
+  [ -r "${_df_mod}/functions" ] && . "${_df_mod}/functions"
+fi
 {{- end }}
 {{- end }}

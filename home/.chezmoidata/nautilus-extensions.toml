@@ -46,7 +46,7 @@ enabled = false
 
 [extensions.deb-installer]
 package = "nautilus-deb-installer"
-enabled = false
+enabled = true
 
 [extensions.video-to-audio]
 package = "nautilus-video-to-audio"
@@ -86,7 +86,7 @@ enabled = false
 
 [extensions.hidden-dim-icon]
 package = "nautilus-hidden-dim-icon"
-enabled = false
+enabled = true
 
 [extensions.hidden-dim-all]
 package = "nautilus-hidden-dim-all"

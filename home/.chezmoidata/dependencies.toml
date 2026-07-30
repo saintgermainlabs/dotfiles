@@ -31,6 +31,13 @@ description = "Docker helpers module"
 [dependencies.docker.roles.local]
 lazydocker = "latest"
 
+[dependencies.hashicorp-vault]
+description = "HashiCorp Vault CLI and shell helpers (requires modules.hashicorp-vault)"
+
+[dependencies.hashicorp-vault.tools]
+vault = "latest"
+jq = "latest"
+
 [dependencies.nautilus]
 requires_gui = true
 description = "Nautilus scripts (clipboard uses session-specific system packages)"

@@ -15,4 +15,8 @@ lazygit = "latest"
 lazydocker = "latest"
 starship = "latest"
 {{- end }}
+{{- if index .modules "hashicorp-vault" }}
+vault = "latest"
+jq = "latest"
+{{- end }}
 {{- end -}}

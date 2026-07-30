@@ -37,6 +37,10 @@ description = "Thunar config (enable and disable nautilus if preferred)"
 enabled = true
 description = "Docker shell helpers under ~/.dotfiles/modules/docker"
 
+[modules.hashicorp-vault]
+enabled = false
+description = "Vault CLI helpers under ~/.dotfiles/modules/hashicorp-vault"
+
 [modules.mise]
 enabled = true
 description = "Additive mise tools via ~/.config/mise/conf.d/dotfiles.toml (never overwrites config.toml)"

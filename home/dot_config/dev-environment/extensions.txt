@@ -1,0 +1,22 @@
+# Python
+ms-python.python
+ms-python.vscode-pylance
+charliermarsh.ruff
+
+# Configuration and infrastructure
+redhat.vscode-yaml
+tamasfe.even-better-toml
+ms-azuretools.vscode-docker
+ms-vscode-remote.remote-ssh
+
+# Shell
+timonwong.shellcheck
+foxundermoon.shell-format
+
+# Git and editor
+eamodio.gitlens
+EditorConfig.EditorConfig
+usernamehw.errorlens
+
+# Mise integration
+hverlin.mise-vscode
