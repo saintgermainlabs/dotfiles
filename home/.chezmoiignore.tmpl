@@ -45,6 +45,7 @@
 .config/mimeapps.list
 .config/nautilus/
 .local/share/nautilus/
+.local/share/nautilus-python/
 .config/dotfiles/nautilus-extensions.toml
 .config/thunar/
 .config/alacritty/
@@ -62,6 +63,7 @@
 
 {{- if not (dig "nautilus_extensions" false .modules) }}
 .config/dotfiles/nautilus-extensions.toml
+.local/share/nautilus-python/
 {{- end }}
 
 {{- if not (dig "thunar" false .modules) }}
