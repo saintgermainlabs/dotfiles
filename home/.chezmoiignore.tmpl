@@ -39,22 +39,34 @@
 .dotfiles/common/
 {{- end }}
 
-# GUI bundle (mimeapps + any desktop helpers)
-{{- if or (not (dig "gui" false .)) (not (dig "gui" false .modules)) }}
+# --- Headless / remote: drop every desktop path when gui = false ---
+# Unknown hosts default to gui=false; Nautilus scripts live under .local/share/nautilus/.
+{{- if not (dig "gui" false .) }}
+.config/mimeapps.list
+.config/nautilus/
+.local/share/nautilus/
+.config/dotfiles/nautilus-extensions.toml
+.config/thunar/
+.config/alacritty/
+.config/ulauncher/
+{{- else }}
+# GUI host: still respect per-module toggles
+{{- if not (dig "gui" false .modules) }}
 .config/mimeapps.list
 {{- end }}
 
-{{- if or (not (dig "gui" false .)) (not (dig "nautilus" false .modules)) }}
+{{- if not (dig "nautilus" false .modules) }}
 .config/nautilus/
 .local/share/nautilus/
 {{- end }}
 
-{{- if or (not (dig "gui" false .)) (not (dig "nautilus_extensions" false .modules)) }}
+{{- if not (dig "nautilus_extensions" false .modules) }}
 .config/dotfiles/nautilus-extensions.toml
 {{- end }}
 
-{{- if or (not (dig "gui" false .)) (not (dig "thunar" false .modules)) }}
+{{- if not (dig "thunar" false .modules) }}
 .config/thunar/
+{{- end }}
 {{- end }}
 
 # Role extras: only apply the matching role directory.
