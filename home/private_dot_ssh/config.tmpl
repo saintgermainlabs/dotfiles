@@ -47,6 +47,13 @@ Host ubuntu
     IdentityFile ~/.ssh/id_ed25519
     IdentitiesOnly yes
     User dom
+{{- else if eq .role "remote" }}
+Host storagebox
+    HostName u618588.your-storagebox.de
+    User u618588
+    Port 23
+    IdentityFile ~/.ssh/storagebox_ed25519.pub # Or the exact name of your public key in 1Password
+    IdentitiesOnly yes
 {{- end }}
 
 {{- if (env "SSH_HETZNER_IP") }}

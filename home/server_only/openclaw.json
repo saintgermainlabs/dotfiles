@@ -1,0 +1,382 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.7.1",
+    "lastTouchedAt": "2026-08-04T06:24:47.596Z"
+  },
+  "wizard": {
+    "lastRunAt": "2026-08-04T02:21:34.801Z",
+    "lastRunVersion": "2026.7.1",
+    "lastRunCommand": "doctor",
+    "lastRunMode": "local"
+  },
+  "browser": {
+    "evaluateEnabled": true,
+    "cdpUrl": "http://browser:9223",
+    "remoteCdpTimeoutMs": 1500,
+    "remoteCdpHandshakeTimeoutMs": 3000,
+    "defaultProfile": "openclaw",
+    "snapshotDefaults": {
+      "mode": "efficient"
+    },
+    "ssrfPolicy": {
+      "dangerouslyAllowPrivateNetwork": false,
+      "hostnameAllowlist": [
+        "*.tiger-bushmaster.ts.net",
+        "tiger-bushmaster.ts.net"
+      ]
+    },
+    "profiles": {
+      "figma": {
+        "cdpUrl": "http://browser:9223",
+        "color": "#A259FF"
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "openrouter/google/gemini-2.5-flash"
+      },
+      "workspace": "/workspace",
+        "sandbox": {
+          "mode": "all",
+          "scope": "agent",
+          "workspaceAccess": "rw",
+          "docker": {
+            "binds": [
+              "/srv/openclaw/sandbox:/sandbox:rw"
+            ],
+            "dangerouslyAllowExternalBindSources": true
+          }
+        },
+      "maxConcurrent": 3,
+      "subagents": {
+        "maxConcurrent": 4,
+        "archiveAfterMinutes": 60
+      }
+    }
+  },
+  "messages": {
+    "ackReactionScope": "group-mentions"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw",
+    "ownerAllowFrom": [
+      "telegram:5475700557"
+    ]
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "groupPolicy": "allowlist",
+      "streaming": {
+        "mode": "partial"
+      }
+    }
+  },
+    "gateway": {
+      "port": 18789,
+      "mode": "local",
+      "bind": "lan",
+
+      "controlUi": {
+        "enabled": true,
+        "allowedOrigins": [
+          "https://openclaw.tiger-bushmaster.ts.net"
+        ],
+        "allowInsecureAuth": false
+      },
+
+      "auth": {
+        "mode": "token",
+        "token": "${OPENCLAW_GATEWAY_TOKEN}",
+        "allowTailscale": true,
+
+        "rateLimit": {
+          "maxAttempts": 10,
+          "windowMs": 60000,
+          "lockoutMs": 300000
+        }
+      },
+
+      "reload": {
+        "mode": "hybrid",
+        "debounceMs": 300
+      }
+    },
+  "plugins": {
+    "entries": {
+      "telegram": {
+        "enabled": true,
+        "config": {}
+      },
+      "memory-core": {
+        "config": {}
+      },
+      "openrouter": {
+        "enabled": true
+      },
+      "browser": {
+        "enabled": true
+      },
+      "memory-wiki": {
+        "enabled": true,
+        "config": {
+          "vaultMode": "isolated",
+          "vault": {
+            "path": "/knowledge/memory"
+          },
+          "render": {
+            "preserveHumanBlocks": true,
+            "createBacklinks": true,
+            "createDashboards": true
+          }
+        }
+      },
+      "perplexity": {
+        "enabled": true,
+        "config": {
+          "webSearch": {
+            "apiKey": "${OPENROUTER_API_KEY}"
+          }
+        }
+      },
+      "searxng": {
+        "enabled": true,
+        "config": {
+          "webSearch": {
+            "baseUrl": "http://openclaw-searxng:8080",
+            "categories": "general",
+            "language": "en"
+          }
+        }
+      },
+      "lossless-claw": {
+        "enabled": true
+      },
+      "acpx": {
+        "enabled": true
+      }
+    },
+    "slots": {
+      "contextEngine": "lossless-claw"
+    }
+  },
+  "cron": {
+    "maxConcurrentRuns": 8
+  },
+  "skills": {
+    "entries": {
+      "1password": {
+        "enabled": false
+      },
+      "blogwatcher": {
+        "enabled": false
+      },
+      "blucli": {
+        "enabled": false
+      },
+      "camsnap": {
+        "enabled": false
+      },
+      "coding-agent": {
+        "enabled": true
+      },
+      "eightctl": {
+        "enabled": false
+      },
+      "gemini": {
+        "enabled": false
+      },
+      "gh-issues": {
+        "enabled": true
+      },
+      "gifgrep": {
+        "enabled": false
+      },
+      "github": {
+        "enabled": true
+      },
+      "gog": {
+        "enabled": false
+      },
+      "goplaces": {
+        "enabled": false
+      },
+      "himalaya": {
+        "enabled": false
+      },
+      "mcporter": {
+        "enabled": false
+      },
+      "nano-pdf": {
+        "enabled": false
+      },
+      "obsidian": {
+        "enabled": false
+      },
+      "openai-whisper": {
+        "enabled": false
+      },
+      "openai-whisper-api": {
+        "enabled": false
+      },
+      "openhue": {
+        "enabled": false
+      },
+      "oracle": {
+        "enabled": false
+      },
+      "ordercli": {
+        "enabled": false
+      },
+      "sag": {
+        "enabled": false
+      },
+      "session-logs": {
+        "enabled": false
+      },
+      "sherpa-onnx-tts": {
+        "enabled": false
+      },
+      "songsee": {
+        "enabled": false
+      },
+      "sonoscli": {
+        "enabled": false
+      },
+      "spotify-player": {
+        "enabled": false
+      },
+      "summarize": {
+        "enabled": true
+      },
+      "tmux": {
+        "enabled": true
+      },
+      "trello": {
+        "enabled": false
+      },
+      "video-frames": {
+        "enabled": false
+      },
+      "xurl": {
+        "enabled": false
+      },
+      "qqbot-channel": {
+        "enabled": false
+      },
+      "qqbot-media": {
+        "enabled": false
+      },
+      "qqbot-remind": {
+        "enabled": false
+      },
+      "bitwarden": {
+        "enabled": true
+      },
+      "cloudflare": {
+        "enabled": false
+      },
+      "playwright-mcp": {
+        "enabled": false
+      },
+      "figma-make-download": {
+        "enabled": true
+      }
+    },
+    "load": {
+      "extraDirs": [
+        "/skills/custom",
+        "/skills/community",
+        "/skills/development"
+      ],
+      "watch": true
+    }
+  },
+  "tools": {
+      "profile": "coding",
+
+      "codeMode": {
+        "enabled": true
+      },
+
+    "web": {
+      "search": {
+        "provider": "searxng",
+        "enabled": true,
+        "openaiCodex": {}
+      },
+      "fetch": {
+        "enabled": true
+      }
+    }
+  },
+  "mcp": {
+    "servers": {
+      "context7": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@upstash/context7-mcp"
+        ]
+      },
+      "coolify-readonly": {
+        "url": "https://ubuntu-server.tiger-bushmaster.ts.net/mcp",
+        "transport": "streamable-http",
+        "headers": {
+          "Authorization": "Bearer ${COOLIFY_MCP_TOKEN}"
+        },
+        "toolFilter": {
+          "include": [
+            "list_servers",
+            "list_applications",
+            "list_services",
+            "list_databases",
+            "get_server",
+            "get_application",
+            "get_service",
+            "get_database",
+            "get_server_resources",
+            "get_domains",
+            "server_resources",
+            "server_domains",
+            "list_deployments",
+            "get_infrastructure_overview",
+            "get_version",
+            "diagnose_app",
+            "diagnose_server",
+            "find_issues"
+          ]
+        }
+      },
+      "tailscale-readonly": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@hexsleeves/tailscale-mcp-server"
+        ],
+        "env": {
+          "TAILSCALE_API_KEY": "${TAILSCALE_API_KEY}",
+          "TAILSCALE_TAILNET": "-",
+          "TAILSCALE_ALLOWED_TOOL_RISK": "read"
+        },
+        "toolFilter": {
+          "include": [
+            "list_devices",
+            "get_tailnet_info",
+            "get_network_status",
+            "get_version",
+            "get_version_info",
+            "ping_peer"
+          ]
+        }
+      }
+    }
+  }
+}

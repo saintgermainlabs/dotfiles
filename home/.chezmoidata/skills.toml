@@ -1,0 +1,8 @@
+# Optional wishlist of ClawHub skills for the remote OpenClaw instance.
+# Not auto-applied. Install with:
+#   oc_skill_install @owner/slug
+
+[skills.openclaw]
+wanted = [
+  "@arulmozhiv/facebook-scraper",
+]

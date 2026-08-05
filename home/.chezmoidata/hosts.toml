@@ -9,3 +9,8 @@ gui = true
 [hosts.ubuntu-server]
 role = "remote"
 gui = false
+
+# Coolify/Hetzner host (SSH Host alias: ubuntu)
+[hosts.Ubuntu-24]
+role = "remote"
+gui = false

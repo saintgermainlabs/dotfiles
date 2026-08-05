@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# openclaw-remote
+#
+# Execute OpenClaw management commands inside a remote Docker container over SSH.
+#
+# Required:
+#   OPENCLAW_REMOTE_SSH   SSH target, e.g. dom@server-name or dom@100.x.y.z
+#
+# Optional:
+#   OPENCLAW_CONTAINER    Exact Docker container name. If unset, auto-discovery is used.
+#   OPENCLAW_DOCKER       Docker command on remote host (default: docker)
+#   OPENCLAW_CLI          OpenClaw executable in container (default: openclaw)
+#
+# Examples:
+#   openclaw-remote status
+#   openclaw-remote skills list
+#   openclaw-remote skills install @owner/weather
+#   openclaw-remote skills install @owner/weather --global
+#   openclaw-remote plugins list
+#   openclaw-remote plugins install some-package
+#   openclaw-remote exec openclaw config get gateway.mode
+#   openclaw-remote shell
+#   openclaw-remote logs -f
+#   openclaw-remote restart
+
+REMOTE="${OPENCLAW_REMOTE_SSH:-ubuntu}"
+DOCKER="${OPENCLAW_DOCKER:-docker}"
+CLI="${OPENCLAW_CLI:-openclaw}"
+CONTAINER="${OPENCLAW_CONTAINER:-openclaw-syowig5e8r47c96qh26btdc0}"
+
+die() {
+  printf 'Error: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  openclaw-remote <command> [args...]
+
+Commands:
+  status                         Show remote host/container/OpenClaw status
+  discover                       Print detected OpenClaw container
+  shell                          Open an interactive shell in the container
+  exec <cmd...>                  Run an arbitrary command in the container
+  logs [docker-log-args...]      Show container logs (e.g. logs -f --tail 200)
+  restart                        Restart the OpenClaw container
+
+  skills <subcommand> [...]      Run: openclaw skills ...
+  plugins <subcommand> [...]     Run: openclaw plugins ...
+  config <subcommand> [...]      Run: openclaw config ...
+  devices <subcommand> [...]     Run: openclaw devices ...
+  gateway <subcommand> [...]     Run: openclaw gateway ...
+  health [args...]               Run: openclaw health ...
+
+Environment:
+  OPENCLAW_REMOTE_SSH   Required SSH target, e.g. dom@my-server
+  OPENCLAW_CONTAINER    Optional exact Docker container name
+  OPENCLAW_DOCKER       Optional remote Docker command (default: docker)
+  OPENCLAW_CLI          Optional CLI executable in container (default: openclaw)
+
+Examples:
+  export OPENCLAW_REMOTE_SSH=dom@my-server
+
+  openclaw-remote status
+  openclaw-remote skills install @facundolucci/plsreadme --global
+  openclaw-remote skills list
+  openclaw-remote plugins install clawhub:some-plugin
+  openclaw-remote plugins list
+  openclaw-remote logs -f
+EOF
+}
+
+[[ -n "$REMOTE" ]] || die \
+  "OPENCLAW_REMOTE_SSH is not set. Example: export OPENCLAW_REMOTE_SSH=dom@my-server"
+
+ssh_run() {
+  ssh -o BatchMode=yes "$REMOTE" "$@"
+}
+
+# Return one likely OpenClaw container.
+discover_container() {
+  if [[ -n "$CONTAINER" ]]; then
+    printf '%s\n' "$CONTAINER"
+    return
+  fi
+
+  # Prefer containers with an OpenClaw-ish explicit name or image.
+  local found
+  found="$(
+    ssh_run "$DOCKER ps --format '{{.Names}}\t{{.Image}}' \
+      | awk 'BEGIN{IGNORECASE=1} /openclaw/ {print \$1; exit}'"
+  )"
+
+  [[ -n "$found" ]] || die \
+    "Could not auto-detect an OpenClaw container. Set OPENCLAW_CONTAINER explicitly."
+  printf '%s\n' "$found"
+}
+
+container_exists() {
+  local c="$1"
+  ssh_run "$DOCKER inspect '$c' >/dev/null 2>&1"
+}
+
+container_running() {
+  local c="$1"
+  local running
+  running="$(ssh_run "$DOCKER inspect -f '{{.State.Running}}' '$c' 2>/dev/null" || true)"
+  [[ "$running" == "true" ]]
+}
+
+docker_exec() {
+  local c="$1"
+  shift
+
+  # Safely shell-quote every argument before sending over SSH.
+  local quoted=()
+  local arg
+  for arg in "$@"; do
+    printf -v arg '%q' "$arg"
+    quoted+=("$arg")
+  done
+
+  ssh_run "$DOCKER exec '$c' ${quoted[*]}"
+}
+
+docker_exec_tty() {
+  local c="$1"
+  shift
+
+  local quoted=()
+  local arg
+  for arg in "$@"; do
+    printf -v arg '%q' "$arg"
+    quoted+=("$arg")
+  done
+
+  ssh -t "$REMOTE" "$DOCKER exec -it '$c' ${quoted[*]}"
+}
+
+container="$(discover_container)"
+container_exists "$container" || die "Container '$container' does not exist on $REMOTE."
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+  help|-h|--help)
+    usage
+    ;;
+
+  discover)
+    printf '%s\n' "$container"
+    ;;
+
+  status)
+    printf 'SSH target:   %s\n' "$REMOTE"
+    printf 'Container:    %s\n' "$container"
+
+    if container_running "$container"; then
+      printf 'Docker state: running\n'
+    else
+      printf 'Docker state: stopped\n'
+      exit 1
+    fi
+
+    printf 'OpenClaw:     '
+    docker_exec "$container" "$CLI" --version || true
+
+    printf '\nGateway mode:\n'
+    docker_exec "$container" "$CLI" config get gateway.mode || true
+
+    printf '\nHealth:\n'
+    docker_exec "$container" "$CLI" health || true
+    ;;
+
+  shell)
+    docker_exec_tty "$container" sh
+    ;;
+
+  exec)
+    [[ $# -gt 0 ]] || die "exec requires a command"
+    docker_exec "$container" "$@"
+    ;;
+
+  logs)
+    local_args=()
+    for arg in "$@"; do
+      printf -v arg '%q' "$arg"
+      local_args+=("$arg")
+    done
+    ssh "$REMOTE" "$DOCKER logs ${local_args[*]} '$container'"
+    ;;
+
+  restart)
+    ssh_run "$DOCKER restart '$container'"
+    ;;
+
+  skills|plugins|config|devices|gateway)
+    docker_exec "$container" "$CLI" "$cmd" "$@"
+    ;;
+
+  health)
+    docker_exec "$container" "$CLI" health "$@"
+    ;;
+
+  *)
+    # Convenience fallback: pass unknown first-level commands directly to OpenClaw.
+    docker_exec "$container" "$CLI" "$cmd" "$@"
+    ;;
+esac

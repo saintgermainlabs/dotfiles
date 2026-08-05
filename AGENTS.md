@@ -3,7 +3,13 @@
 This repository manages personal configuration with Chezmoi only.
 Every change must be safe to re-apply with `chezmoi apply`.
 
+## Rule
+
+DO NOT DELETE FILES WITHOUT MY AUTHORIZATION
+
+
 ## Scope
+
 
 Chezmoi owns **dotfiles and config files**.
 

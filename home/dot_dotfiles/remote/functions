@@ -1,0 +1,50 @@
+
+# StorageBox Functions
+
+# Connect to storage box as root user
+#
+# Usage: storagebox_con <username>
+#
+# Connects to the user's storage box as the root user via SSH.
+#
+# Arguments:
+#   username - The username for the storage box (e.g., your_username)
+storagebox_con() {
+    local username="$1"
+
+    local hostname="${username}.${username}.your-storagebox.de"
+
+    ssh -p 23 -i /root/.ssh/server-backup-storagebox "$username@$hostname"
+}
+
+# Run a command on the remote host via SSH
+#
+# Usage: r_cmd <remote_host> <command>
+#
+# Executes a specified command on a remote host using SSH.
+#
+# Arguments:
+#   remote_host - The SSH alias or IP address of the remote host.
+#   command     - The command to execute on the remote host.
+r_cmd() {
+    local remote_host="$1"
+    local command="$2"
+    ssh "$remote_host" "$command"
+}
+
+# Send files to the remote host via SCP
+#
+# Usage: r_send <remote_host> <local_path> <remote_path>
+#
+# Copies a file from the local machine to a remote host using SCP.
+#
+# Arguments:
+#   remote_host - The SSH alias or IP address of the remote host.
+#   local_path  - The path to the file on the local machine.
+#   remote_path - The destination path on the remote host.
+r_send() {
+    local remote_host="$1"
+    local local_path="$2"
+    local remote_path="$3"
+    scp "$local_path" "$remote_host:$remote_path"
+}

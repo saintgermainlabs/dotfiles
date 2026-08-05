@@ -10,6 +10,14 @@
 # macOS / editor noise
 .DS_Store
 
+# --- Host Specific
+{{ if eq .role "remote" }}
+
+.config/some-desktop-app/
+{{ end }}
+
+
+
 # --- Module gates (dig so missing data during init does not explode) ---
 
 {{- if not (dig "git" false .modules) }}
@@ -33,6 +41,10 @@
 
 {{- if not (dig "hashicorp-vault" false .modules) }}
 .dotfiles/modules/hashicorp-vault/
+{{- end }}
+
+{{- if not (dig "openclaw" false .modules) }}
+.dotfiles/modules/openclaw/
 {{- end }}
 
 {{- if not (dig "common" false .modules) }}
@@ -74,7 +86,11 @@
 # Role extras: only apply the matching role directory.
 {{- if ne (dig "role" "remote" .) "local" }}
 .dotfiles/local/
+.local/bin/openclaw-remote
 {{- end }}
 {{- if ne (dig "role" "remote" .) "remote" }}
 .dotfiles/remote/
+.dotfiles/modules/local_to_remote
 {{- end }}
+
+server_only/

@@ -41,6 +41,14 @@ description = "Docker shell helpers under ~/.dotfiles/modules/docker"
 enabled = false
 description = "Vault CLI helpers under ~/.dotfiles/modules/hashicorp-vault"
 
+[modules.openclaw]
+enabled = true
+description = "Remote OpenClaw helpers (SSH + docker exec) under ~/.dotfiles/modules/openclaw"
+
 [modules.mise]
 enabled = true
 description = "Additive mise tools via ~/.config/mise/conf.d/dotfiles.toml (never overwrites config.toml)"
+
+[modules.local_to_remote]
+enabled = true
+description = "Functions for managing remote server locally."
