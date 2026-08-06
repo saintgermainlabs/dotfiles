@@ -1,114 +1,389 @@
-# Help — all-inclusive manual for every loaded dotfiles alias/function.
-# Sourced from common/ (see source-common.tmpl). Scans ~/.dotfiles tree.
+# Help — module-aware manual for every loaded dotfiles alias/function.
+# Sourced from common/ (see source-common.tmpl). Parses ~/.dotfiles as text.
+#
+# Pipeline: discovery → parsing → structured records → search/filter → rendering
+# Bash-only (manual itself). Module loaders remain Bash/Zsh compatible.
 
 MANUAL_LAST_COUNT=0
 
-# Collect every shell module file that may define aliases/functions.
-_manual_files() {
-  local shell_dir="${DF_DIR:-$HOME/.dotfiles}"
-  local -a files=()
-  local seen="|"
-  local f role
+# ---------------------------------------------------------------------------
+# Record storage (parallel arrays — Bash-friendly, no external deps)
+# ---------------------------------------------------------------------------
 
-  _manual_add() {
-    local path="$1"
-    [ -f "$path" ] || return 0
-    case "$seen" in *"|${path}|"*) return 0 ;; esac
-    seen="${seen}${path}|"
-    files+=("$path")
-  }
+declare -a MANUAL_M_ID=()
+declare -a MANUAL_M_TITLE=()
+declare -a MANUAL_M_DESC=()
+declare -a MANUAL_M_CAT=()
+declare -a MANUAL_M_REQ=()
+declare -a MANUAL_M_TAGS=()
+declare -a MANUAL_M_SOURCES=()
+declare -a MANUAL_M_PATH=()
 
-  # common (skip non-command config files)
-  for f in aliases functions help; do
-    _manual_add "${shell_dir}/common/${f}"
-  done
+declare -a MANUAL_C_TYPE=()
+declare -a MANUAL_C_NAME=()
+declare -a MANUAL_C_MODULE=()
+declare -a MANUAL_C_CAT=()
+declare -a MANUAL_C_DESC=()
+declare -a MANUAL_C_USAGE=()
+declare -a MANUAL_C_ARGS=()
+declare -a MANUAL_C_OPTIONS=()
+declare -a MANUAL_C_ENV=()
+declare -a MANUAL_C_EXIT=()
+declare -a MANUAL_C_STDIN=()
+declare -a MANUAL_C_STDOUT=()
+declare -a MANUAL_C_STDERR=()
+declare -a MANUAL_C_REQ=()
+declare -a MANUAL_C_EXAMPLES=()
+declare -a MANUAL_C_SEE=()
+declare -a MANUAL_C_TAGS=()
+declare -a MANUAL_C_SOURCE=()
+declare -a MANUAL_C_INTERNAL=()
+declare -a MANUAL_C_BODY=()
 
-  # role extras currently applied
-  role="${DOTFILES_ROLE:-}"
-  if [ -n "$role" ] && [ -d "${shell_dir}/${role}" ]; then
-    for f in "${shell_dir}/${role}"/*; do
-      [ -f "$f" ] || continue
-      case "$(basename "$f")" in
-        env|README|README.md) continue ;;
-      esac
-      _manual_add "$f"
-    done
-  fi
+# ---------------------------------------------------------------------------
+# Colors
+# ---------------------------------------------------------------------------
 
-  # optional modules (docker, …) — whatever is present under modules/
-  if [ -d "${shell_dir}/modules" ]; then
-    for f in "${shell_dir}/modules"/*/*; do
-      [ -f "$f" ] || continue
-      case "$(basename "$f")" in
-        *.md|*.txt|*.toml|*.yaml|*.yml|README) continue ;;
-      esac
-      _manual_add "$f"
-    done
-  fi
-
-  # user-managed aliases file if present
-  _manual_add "${HOME}/.bash_aliases"
-
-  printf '%s\n' "${files[@]}"
-}
-
+## @internal
+## @category Manual
+## @description Initialize ANSI color variables when stdout is a terminal.
 _manual_init_colors() {
   if [ -t 1 ]; then
     MANUAL_TITLE=$'\033[1;35m'
     MANUAL_NAME=$'\033[1;33m'
     MANUAL_ARROW=$'\033[2;37m'
     MANUAL_DIM=$'\033[2m'
+    MANUAL_BOLD=$'\033[1m'
     MANUAL_RESET=$'\033[0m'
   else
-    MANUAL_TITLE="" MANUAL_NAME="" MANUAL_ARROW="" MANUAL_DIM="" MANUAL_RESET=""
+    MANUAL_TITLE="" MANUAL_NAME="" MANUAL_ARROW="" MANUAL_DIM="" MANUAL_BOLD="" MANUAL_RESET=""
   fi
 }
 
-_manual_is_internal() {
-  local block="$1"
-  grep -q '@internal' <<<"$block"
+# ---------------------------------------------------------------------------
+# Path helpers
+# ---------------------------------------------------------------------------
+
+## @internal
+## @category Manual
+## @description Resolve the dotfiles root directory used for discovery.
+_manual_shell_dir() {
+  printf '%s\n' "${DF_DIR:-$HOME/.dotfiles}"
 }
 
-_manual_summary() {
-  local block="$1"
-  local line desc=""
-  while IFS= read -r line; do
-    # Trim leading whitespace, then optional comment markers.
+## @internal
+## @category Manual
+## @description Return a path relative to the dotfiles root (or HOME) for display.
+## @arg $1 path Absolute or relative source path.
+_manual_relpath() {
+  local file="$1"
+  local shell_dir home
+  shell_dir="$(_manual_shell_dir)"
+  home="${HOME}"
+
+  case "$file" in
+    "${shell_dir}"/*) printf '%s\n' "${file#"${shell_dir}"/}" ;;
+    "${home}"/*) printf '%s\n' "${file#"${home}"/}" ;;
+    *) printf '%s\n' "${file##*/}" ;;
+  esac
+}
+
+## @internal
+## @category Manual
+## @description Append a unique path to a named array (avoids duplicate scans).
+## @arg $1 string Name of the bash array variable.
+## @arg $2 path File path to add.
+_manual_add_unique() {
+  local -n _manual_arr_ref="$1"
+  local path="$2"
+  local existing
+  [ -f "$path" ] || return 0
+  for existing in "${_manual_arr_ref[@]+"${_manual_arr_ref[@]}"}"; do
+    [ "$existing" = "$path" ] && return 0
+  done
+  _manual_arr_ref+=("$path")
+}
+
+# ---------------------------------------------------------------------------
+# Module metadata parsing
+# ---------------------------------------------------------------------------
+
+## @internal
+## @category Manual
+## @description Parse ## @module annotations from a module.sh file into MANUAL_M_* arrays.
+## @arg $1 path Path to module.sh.
+## @arg $2 string Optional module id override (directory name).
+_manual_parse_module() {
+  local file="$1"
+  local fallback_id="${2:-}"
+  local id="" title="" desc="" category="" tags=""
+  local -a requires=() sources=()
+  local line key val
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    # Only consider documentation comments.
+    [[ "$line" =~ ^[[:space:]]*# ]] || continue
     line="${line#"${line%%[![:space:]]*}"}"
-    line="${line#\# }"
     line="${line#\#}"
     line="${line#"${line%%[![:space:]]*}"}"
-    [[ -z "$line" || "$line" =~ ^[[:space:]]*$ ]] && continue
-    [[ "$line" == @internal* ]] && continue
-    [[ "$line" =~ ^(Usage|Examples?|Example|Requires): ]] && continue
-    [[ "$line" == MANUAL_ALL* ]] && continue
-    [[ "$line" =~ ^─+$ ]] && continue
-    [[ "$line" =~ ^──.*── ]] && continue
-    [[ "$line" =~ ─{3,} ]] && continue
-    desc="$line"
-  done <<<"$block"
-  [ -n "$desc" ] && printf '%s' "$desc"
-  [ -n "$desc" ]
+    [[ "$line" == \#* ]] && line="${line#\#}" && line="${line#"${line%%[![:space:]]*}"}"
+
+    if [[ "$line" =~ ^@([a-zA-Z0-9_-]+)[[:space:]]*(.*)$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      val="${BASH_REMATCH[2]}"
+      val="${val%"${val##*[![:space:]]}"}"
+      case "$key" in
+        module) id="$val" ;;
+        title) title="$val" ;;
+        description) desc="$val" ;;
+        category) category="$val" ;;
+        tags) tags="$val" ;;
+        requires) [ -n "$val" ] && requires+=("$val") ;;
+        source) [ -n "$val" ] && sources+=("$val") ;;
+        *) ;; # unknown annotations are ignored
+      esac
+    fi
+  done < "$file"
+
+  [ -n "$id" ] || id="$fallback_id"
+  [ -n "$title" ] || title="$id"
+  [ -n "$id" ] || return 1
+
+  # Fallback: conventional command files when @source is absent.
+  # Contained here so it is easy to remove later.
+  if [ "${#sources[@]}" -eq 0 ]; then
+    local dir base
+    dir="$(dirname -- "$file")"
+    for base in functions.sh functions aliases.sh aliases; do
+      [ -f "${dir}/${base}" ] && sources+=("$base")
+    done
+  fi
+
+  MANUAL_M_ID+=("$id")
+  MANUAL_M_TITLE+=("$title")
+  MANUAL_M_DESC+=("$desc")
+  MANUAL_M_CAT+=("$category")
+  MANUAL_M_REQ+=("$(IFS=$'\n'; echo "${requires[*]+"${requires[*]}"}")")
+  MANUAL_M_TAGS+=("$tags")
+  MANUAL_M_SOURCES+=("$(IFS=$'\n'; echo "${sources[*]+"${sources[*]}"}")")
+  MANUAL_M_PATH+=("$file")
 }
 
-_manual_scan_file() {
+## @internal
+## @category Manual
+## @description Register a synthetic "common" or role module without a module.sh.
+## @arg $1 string Module id.
+## @arg $2 string Display title.
+## @arg $3 string Description.
+## @arg $4 string Category.
+_manual_register_virtual_module() {
+  local id="$1" title="$2" desc="$3" category="$4"
+  local i
+  for i in "${!MANUAL_M_ID[@]}"; do
+    [ "${MANUAL_M_ID[$i]}" = "$id" ] && return 0
+  done
+  MANUAL_M_ID+=("$id")
+  MANUAL_M_TITLE+=("$title")
+  MANUAL_M_DESC+=("$desc")
+  MANUAL_M_CAT+=("$category")
+  MANUAL_M_REQ+=("")
+  MANUAL_M_TAGS+=("")
+  MANUAL_M_SOURCES+=("")
+  MANUAL_M_PATH+=("")
+}
+
+# ---------------------------------------------------------------------------
+# Command annotation parsing
+# ---------------------------------------------------------------------------
+
+## @internal
+## @category Manual
+## @description Join array elements with newlines into a single string (via nameref).
+## @arg $1 string Name of source array.
+## @arg $2 string Name of destination scalar variable.
+_manual_join_lines() {
+  local -n _jl_src="$1"
+  local -n _jl_dst="$2"
+  local _jl_out=""
+  _jl_dst=""
+  ((${#_jl_src[@]})) || return 0
+  printf -v _jl_out '%s\n' "${_jl_src[@]}"
+  _jl_dst="${_jl_out%$'\n'}"
+}
+
+## @internal
+## @category Manual
+## @description Parse a documentation comment block into structured fields (nameref outs).
+## @arg $1 string Comment block text.
+_manual_parse_command_block() {
+  local block="$1"
+  # Nameref targets are caller locals — keep accumulation names distinct to avoid shadowing.
+  local -n out_cat="$2" out_desc="$3" out_usage="$4"
+  local -n out_args="$5" out_options="$6" out_env="$7" out_exit="$8"
+  local -n out_stdin="$9" out_stdout="${10}" out_stderr="${11}"
+  local -n out_req="${12}" out_examples="${13}" out_see="${14}" out_tags="${15}"
+  local -n out_internal="${16}"
+
+  out_cat="" out_desc="" out_usage="" out_args="" out_options="" out_env=""
+  out_exit="" out_stdin="" out_stdout="" out_stderr="" out_req="" out_examples=""
+  out_see="" out_tags="" out_internal=0
+
+  local line key val pending="" free_desc="" stripped
+  local -a _pb_args=() _pb_options=() _pb_envs=() _pb_exits=()
+  local -a _pb_reqs=() _pb_examples=() _pb_sees=() _pb_desc_lines=()
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    stripped="$line"
+    stripped="${stripped#"${stripped%%[![:space:]]*}"}"
+    # Strip one or two leading comment markers (# or ##).
+    while [[ "$stripped" == \#* ]]; do
+      stripped="${stripped#\#}"
+      stripped="${stripped#"${stripped%%[![:space:]]*}"}"
+    done
+
+    if [[ "$stripped" =~ ^@([a-zA-Z0-9_-]+)[[:space:]]*(.*)$ ]]; then
+      # Flush multi-line description before switching keys.
+      if [ "$pending" = "description" ] && ((${#_pb_desc_lines[@]})); then
+        _manual_join_lines _pb_desc_lines out_desc
+        _pb_desc_lines=()
+      fi
+      pending=""
+      key="${BASH_REMATCH[1]}"
+      val="${BASH_REMATCH[2]}"
+      val="${val%"${val##*[![:space:]]}"}"
+
+      case "$key" in
+        category) out_cat="$val" ;;
+        description)
+          if [ -n "$val" ]; then
+            out_desc="$val"
+          else
+            pending="description"
+          fi
+          ;;
+        summary)
+          # Legacy annotation — use as description when none set yet.
+          [ -z "$out_desc" ] && [ -n "$val" ] && out_desc="$val"
+          ;;
+        usage) out_usage="$val" ;;
+        stdin) out_stdin="$val" ;;
+        stdout) out_stdout="$val" ;;
+        stderr) out_stderr="$val" ;;
+        tags) out_tags="$val" ;;
+        internal) out_internal=1 ;;
+        arg) [ -n "$val" ] && _pb_args+=("$val") ;;
+        option) [ -n "$val" ] && _pb_options+=("$val") ;;
+        env) [ -n "$val" ] && _pb_envs+=("$val") ;;
+        exitcode) [ -n "$val" ] && _pb_exits+=("$val") ;;
+        requires) [ -n "$val" ] && _pb_reqs+=("$val") ;;
+        see) [ -n "$val" ] && _pb_sees+=("$val") ;;
+        example)
+          if [ -n "$val" ]; then
+            _pb_examples+=("$val")
+          else
+            pending="example"
+          fi
+          ;;
+        module|title|source|name|returns) ;; # ignore module-level / legacy extras
+        *) ;; # unknown — do not crash
+      esac
+      continue
+    fi
+
+    if [ "$pending" = "example" ]; then
+      [ -z "$stripped" ] && continue
+      stripped="${stripped#"${stripped%%[![:space:]]*}"}"
+      _pb_examples+=("$stripped")
+      continue
+    fi
+
+    if [ "$pending" = "description" ]; then
+      [ -z "$stripped" ] && continue
+      stripped="${stripped#"${stripped%%[![:space:]]*}"}"
+      _pb_desc_lines+=("$stripped")
+      continue
+    fi
+
+    # Free-form comment fallback for description.
+    [ -z "$stripped" ] && continue
+    [[ "$stripped" =~ ^(Usage|Examples?|Example|Requires): ]] && continue
+    [[ "$stripped" == MANUAL_ALL* ]] && continue
+    [[ "$stripped" =~ ^[─=-]{3,} ]] && continue
+    [[ "$stripped" =~ ^---.+---$ ]] && continue
+    free_desc="$stripped"
+  done <<<"$block"
+
+  if [ "$pending" = "description" ] && ((${#_pb_desc_lines[@]})); then
+    _manual_join_lines _pb_desc_lines out_desc
+  fi
+  [ -n "$out_desc" ] || out_desc="$free_desc"
+
+  _manual_join_lines _pb_args out_args
+  _manual_join_lines _pb_options out_options
+  _manual_join_lines _pb_envs out_env
+  _manual_join_lines _pb_exits out_exit
+  _manual_join_lines _pb_reqs out_req
+  _manual_join_lines _pb_examples out_examples
+  _manual_join_lines _pb_sees out_see
+}
+
+## @internal
+## @category Manual
+## @description Return true if a command should be treated as internal.
+## @arg $1 string Command name.
+## @arg $2 integer Internal flag from annotations (0/1).
+_manual_is_internal() {
+  local name="$1"
+  local flagged="${2:-0}"
+  [[ "$name" == _* ]] && return 0
+  [ "$flagged" = "1" ] && return 0
+  return 1
+}
+
+## @internal
+## @category Manual
+## @description Append a parsed command record to MANUAL_C_* arrays.
+_manual_push_command() {
+  MANUAL_C_TYPE+=("$1")
+  MANUAL_C_NAME+=("$2")
+  MANUAL_C_MODULE+=("$3")
+  MANUAL_C_CAT+=("$4")
+  MANUAL_C_DESC+=("$5")
+  MANUAL_C_USAGE+=("$6")
+  MANUAL_C_ARGS+=("$7")
+  MANUAL_C_OPTIONS+=("$8")
+  MANUAL_C_ENV+=("$9")
+  MANUAL_C_EXIT+=("${10}")
+  MANUAL_C_STDIN+=("${11}")
+  MANUAL_C_STDOUT+=("${12}")
+  MANUAL_C_STDERR+=("${13}")
+  MANUAL_C_REQ+=("${14}")
+  MANUAL_C_EXAMPLES+=("${15}")
+  MANUAL_C_SEE+=("${16}")
+  MANUAL_C_TAGS+=("${17}")
+  MANUAL_C_SOURCE+=("${18}")
+  MANUAL_C_INTERNAL+=("${19}")
+  MANUAL_C_BODY+=("${20}")
+}
+
+## @internal
+## @category Manual
+## @description Scan a shell source file for aliases and functions; append command records.
+## @arg $1 path Source file to parse as text.
+## @arg $2 string Module id owning this file.
+_manual_scan_command_file() {
   local file="$1"
-  local pattern="${2:-}"
-  local mode="${3:-all}"
-  local show_internal="${MANUAL_ALL:-0}"
+  local module_id="$2"
+  local rel comment_block="" line nm body
+  local cat desc usage args options env exitc stdin stdout stderr req examples see tags internal
+  local flagged
 
-  local rel="${file#${HOME}/.dotfiles/}"
-  rel="${rel#${HOME}/}"
-  [ "$rel" = "$file" ] && rel="${file##*/}"
-
-  local comment_block="" file_header_shown=0 count=0
-  local line nm body desc internal
+  [ -f "$file" ] || return 0
+  rel="$(_manual_relpath "$file")"
 
   while IFS= read -r line || [ -n "$line" ]; do
     if [[ "$line" =~ ^#[[:space:]]*──[[:space:]]*(.+)[[:space:]]──[[:space:]]*$ ]]; then
-      rel="${BASH_REMATCH[1]}"
       comment_block=""
-      file_header_shown=0
       continue
     fi
 
@@ -118,115 +393,748 @@ _manual_scan_file() {
     fi
 
     if [[ "$line" =~ ^[[:space:]]*alias[[:space:]]+([^=[:space:]]+)=(.*)$ ]]; then
-      [ "$mode" = "functions" ] && { comment_block=""; continue; }
       nm="${BASH_REMATCH[1]}"
       body="${BASH_REMATCH[2]}"
       body="${body#[\"\']}"; body="${body%[\"\']}"
-      internal=0
-      _manual_is_internal "$comment_block" && internal=1
-      desc="$(_manual_summary "$comment_block" 2>/dev/null || true)"
+      _manual_parse_command_block "$comment_block" \
+        cat desc usage args options env exitc stdin stdout stderr req examples see tags flagged
       comment_block=""
-      if [ "$internal" -eq 1 ] && [ "$show_internal" != "1" ]; then continue; fi
-      if [ -n "$pattern" ] && ! grep -qi -- "$pattern" <<<"$nm $body $desc"; then continue; fi
-      if [ "$file_header_shown" -eq 0 ]; then
-        printf "\n${MANUAL_TITLE}══ %s ══${MANUAL_RESET}\n" "$rel"
-        file_header_shown=1
+      internal=0
+      _manual_is_internal "$nm" "$flagged" && internal=1
+      if [ -z "$cat" ]; then
+        local _mi
+        _mi="$(_manual_mod_index "$module_id" 2>/dev/null || true)"
+        [ -n "$_mi" ] && cat="${MANUAL_M_CAT[$_mi]}"
       fi
-      if [ -n "$desc" ]; then
-        printf "  ${MANUAL_NAME}%-22s${MANUAL_RESET} %s\n" "$nm" "$desc"
-        printf "  ${MANUAL_DIM}%-22s  → %s${MANUAL_RESET}\n" "" "$body"
-      else
-        printf "  ${MANUAL_NAME}%-22s${MANUAL_ARROW} → ${MANUAL_RESET}%s\n" "$nm" "$body"
-      fi
-      ((count++)) || true
+      _manual_push_command "alias" "$nm" "$module_id" "$cat" "$desc" "$usage" \
+        "$args" "$options" "$env" "$exitc" "$stdin" "$stdout" "$stderr" \
+        "$req" "$examples" "$see" "$tags" "$rel" "$internal" "$body"
       continue
     fi
 
     if [[ "$line" =~ ^[[:space:]]*function[[:space:]]+([a-zA-Z_][a-zA-Z0-9_]*) ]] \
        || [[ "$line" =~ ^[[:space:]]*([a-zA-Z_][a-zA-Z0-9_]*)[[:space:]]*\(\)[[:space:]]*\{? ]]; then
-      [ "$mode" = "aliases" ] && { comment_block=""; continue; }
       nm="${BASH_REMATCH[1]}"
-      [[ "$nm" =~ ^_ ]] && [ "$show_internal" != "1" ] && { comment_block=""; continue; }
-      internal=0
-      _manual_is_internal "$comment_block" && internal=1
-      desc="$(_manual_summary "$comment_block" 2>/dev/null || true)"
+      # Skip common false positives from control keywords if any slip through.
+      case "$nm" in
+        if|then|else|elif|fi|for|while|until|do|done|case|esac|select|function|time|coproc) comment_block=""; continue ;;
+      esac
+      _manual_parse_command_block "$comment_block" \
+        cat desc usage args options env exitc stdin stdout stderr req examples see tags flagged
       comment_block=""
-      if [ "$internal" -eq 1 ] && [ "$show_internal" != "1" ]; then continue; fi
-      if [ -n "$pattern" ] && ! grep -qi -- "$pattern" <<<"$nm $desc"; then continue; fi
-      if [ "$file_header_shown" -eq 0 ]; then
-        printf "\n${MANUAL_TITLE}══ %s ══${MANUAL_RESET}\n" "$rel"
-        file_header_shown=1
+      internal=0
+      _manual_is_internal "$nm" "$flagged" && internal=1
+      if [ -z "$cat" ]; then
+        local _mi
+        _mi="$(_manual_mod_index "$module_id" 2>/dev/null || true)"
+        [ -n "$_mi" ] && cat="${MANUAL_M_CAT[$_mi]}"
       fi
-      if [ -n "$desc" ]; then
-        printf "  ${MANUAL_NAME}%-22s${MANUAL_RESET} %s\n" "${nm}()" "$desc"
-      else
-        printf "  ${MANUAL_NAME}%-22s${MANUAL_RESET}\n" "${nm}()"
-      fi
-      ((count++)) || true
+      _manual_push_command "function" "$nm" "$module_id" "$cat" "$desc" "$usage" \
+        "$args" "$options" "$env" "$exitc" "$stdin" "$stdout" "$stderr" \
+        "$req" "$examples" "$see" "$tags" "$rel" "$internal" ""
       continue
     fi
 
     [[ -z "${line//[[:space:]]/}" ]] || comment_block=""
   done < "$file"
+}
+
+## @internal
+## @category Manual
+## @description Look up a module array index by id; prints index or empty.
+## @arg $1 string Module id.
+_manual_mod_index() {
+  local want="$1" i
+  for i in "${!MANUAL_M_ID[@]}"; do
+    if [ "${MANUAL_M_ID[$i]}" = "$want" ]; then
+      printf '%s\n' "$i"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# ---------------------------------------------------------------------------
+# Discovery
+# ---------------------------------------------------------------------------
+
+## @internal
+## @category Manual
+## @description Reset all module/command record arrays.
+_manual_reset_records() {
+  MANUAL_M_ID=() MANUAL_M_TITLE=() MANUAL_M_DESC=() MANUAL_M_CAT=()
+  MANUAL_M_REQ=() MANUAL_M_TAGS=() MANUAL_M_SOURCES=() MANUAL_M_PATH=()
+  MANUAL_C_TYPE=() MANUAL_C_NAME=() MANUAL_C_MODULE=() MANUAL_C_CAT=()
+  MANUAL_C_DESC=() MANUAL_C_USAGE=() MANUAL_C_ARGS=() MANUAL_C_OPTIONS=()
+  MANUAL_C_ENV=() MANUAL_C_EXIT=() MANUAL_C_STDIN=() MANUAL_C_STDOUT=()
+  MANUAL_C_STDERR=() MANUAL_C_REQ=() MANUAL_C_EXAMPLES=() MANUAL_C_SEE=()
+  MANUAL_C_TAGS=() MANUAL_C_SOURCE=() MANUAL_C_INTERNAL=() MANUAL_C_BODY=()
+}
+
+## @internal
+## @category Manual
+## @description Discover modules and common/role command files; populate records.
+_manual_discover() {
+  local shell_dir role f mod_dir mod_name mod_file src src_path i
+  local -a common_files=()
+
+  shell_dir="$(_manual_shell_dir)"
+  _manual_reset_records
+
+  # --- Common command files (virtual module) ---
+  _manual_register_virtual_module "common" "Common" \
+    "Shared aliases and helper functions loaded for every role." "Common"
+
+  for f in aliases functions help; do
+    _manual_add_unique common_files "${shell_dir}/common/${f}"
+  done
+  for f in "${common_files[@]+"${common_files[@]}"}"; do
+    _manual_scan_command_file "$f" "common"
+  done
+
+  # --- Role extras ---
+  role="${DOTFILES_ROLE:-}"
+  if [ -n "$role" ] && [ -d "${shell_dir}/${role}" ]; then
+    _manual_register_virtual_module "$role" "${role^}" \
+      "Role-specific extras for ${role}." "Role"
+    for f in "${shell_dir}/${role}"/*; do
+      [ -f "$f" ] || continue
+      case "$(basename "$f")" in
+        env|README|README.md) continue ;;
+      esac
+      _manual_scan_command_file "$f" "$role"
+    done
+  fi
+
+  # --- Modules: modules/*/module.sh is authoritative ---
+  if [ -d "${shell_dir}/modules" ]; then
+    for mod_dir in "${shell_dir}/modules"/*/; do
+      [ -d "$mod_dir" ] || continue
+      mod_file="${mod_dir}module.sh"
+      [ -f "$mod_file" ] || continue
+      mod_name="$(basename "$mod_dir")"
+      _manual_parse_module "$mod_file" "$mod_name" || continue
+      i="$(_manual_mod_index "${MANUAL_M_ID[-1]}")"
+      # Resolve and scan declared @source files only.
+      while IFS= read -r src; do
+        [ -n "$src" ] || continue
+        case "$src" in
+          /*) src_path="$src" ;;
+          *) src_path="${mod_dir}${src}" ;;
+        esac
+        _manual_scan_command_file "$src_path" "${MANUAL_M_ID[$i]}"
+      done <<<"${MANUAL_M_SOURCES[$i]}"
+    done
+  fi
+
+  # --- User aliases file ---
+  if [ -f "${HOME}/.bash_aliases" ]; then
+    _manual_register_virtual_module "user" "User" \
+      "Aliases from ~/.bash_aliases." "User"
+    _manual_scan_command_file "${HOME}/.bash_aliases" "user"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Search / filter
+# ---------------------------------------------------------------------------
+
+## @internal
+## @category Manual
+## @description Build a searchable haystack string for a command index.
+## @arg $1 integer Command record index.
+_manual_cmd_haystack() {
+  local i="$1"
+  local mod_i title=""
+  mod_i="$(_manual_mod_index "${MANUAL_C_MODULE[$i]}" 2>/dev/null || true)"
+  [ -n "$mod_i" ] && title="${MANUAL_M_TITLE[$mod_i]}"
+  printf '%s\n' \
+    "${MANUAL_C_NAME[$i]}" \
+    "${MANUAL_C_MODULE[$i]}" \
+    "$title" \
+    "${MANUAL_C_CAT[$i]}" \
+    "${MANUAL_C_DESC[$i]}" \
+    "${MANUAL_C_USAGE[$i]}" \
+    "${MANUAL_C_TAGS[$i]}" \
+    "${MANUAL_C_BODY[$i]}" \
+    "${MANUAL_C_REQ[$i]}"
+}
+
+## @internal
+## @category Manual
+## @description Build a searchable haystack for a module index.
+## @arg $1 integer Module record index.
+_manual_mod_haystack() {
+  local i="$1"
+  printf '%s\n' \
+    "${MANUAL_M_ID[$i]}" \
+    "${MANUAL_M_TITLE[$i]}" \
+    "${MANUAL_M_DESC[$i]}" \
+    "${MANUAL_M_CAT[$i]}" \
+    "${MANUAL_M_TAGS[$i]}" \
+    "${MANUAL_M_REQ[$i]}"
+}
+
+## @internal
+## @category Manual
+## @description Return 0 if command index passes type/internal/category/module/pattern filters.
+_manual_cmd_matches() {
+  local i="$1"
+  local pattern="$2"
+  local mode="$3"
+  local show_internal="$4"
+  local category="$5"
+  local module_filter="$6"
+
+  if [ "$show_internal" != "1" ] && [ "${MANUAL_C_INTERNAL[$i]}" = "1" ]; then
+    return 1
+  fi
+
+  case "$mode" in
+    functions) [ "${MANUAL_C_TYPE[$i]}" = "function" ] || return 1 ;;
+    aliases) [ "${MANUAL_C_TYPE[$i]}" = "alias" ] || return 1 ;;
+  esac
+
+  if [ -n "$category" ]; then
+    grep -qi -- "^${category}$" <<<"${MANUAL_C_CAT[$i]}" || return 1
+  fi
+
+  if [ -n "$module_filter" ]; then
+    local mod_i t
+    mod_i="$(_manual_mod_index "${MANUAL_C_MODULE[$i]}" 2>/dev/null || true)"
+    t=""
+    [ -n "$mod_i" ] && t="${MANUAL_M_TITLE[$mod_i]}"
+    grep -qiE -- "^(${module_filter})$" <<<"${MANUAL_C_MODULE[$i]}" \
+      || grep -qiE -- "^(${module_filter})$" <<<"$t" \
+      || return 1
+  fi
+
+  if [ -n "$pattern" ]; then
+    grep -qi -- "$pattern" <<<"$(_manual_cmd_haystack "$i")" || return 1
+  fi
+
+  return 0
+}
+
+## @internal
+## @category Manual
+## @description Return 0 if module index matches pattern / category / module filter.
+_manual_mod_matches() {
+  local i="$1"
+  local pattern="$2"
+  local category="$3"
+  local module_filter="$4"
+
+  if [ -n "$category" ]; then
+    grep -qi -- "^${category}$" <<<"${MANUAL_M_CAT[$i]}" || return 1
+  fi
+
+  if [ -n "$module_filter" ]; then
+    grep -qiE -- "^(${module_filter})$" <<<"${MANUAL_M_ID[$i]}" \
+      || grep -qiE -- "^(${module_filter})$" <<<"${MANUAL_M_TITLE[$i]}" \
+      || return 1
+  fi
+
+  if [ -n "$pattern" ]; then
+    grep -qi -- "$pattern" <<<"$(_manual_mod_haystack "$i")" || return 1
+  fi
+
+  return 0
+}
+
+## @internal
+## @category Manual
+## @description Find exact command-name match index (case-sensitive); prints index.
+## @arg $1 string Exact command name.
+## @arg $2 string Show internal (0/1).
+_manual_find_exact_command() {
+  local want="$1" show_internal="$2" i
+  for i in "${!MANUAL_C_NAME[@]}"; do
+    [ "${MANUAL_C_NAME[$i]}" = "$want" ] || continue
+    if [ "$show_internal" != "1" ] && [ "${MANUAL_C_INTERNAL[$i]}" = "1" ]; then
+      continue
+    fi
+    printf '%s\n' "$i"
+    return 0
+  done
+  return 1
+}
+
+## @internal
+## @category Manual
+## @description Find exact module id or title match (case-insensitive); prints index.
+## @arg $1 string Module id or title.
+_manual_find_exact_module() {
+  local want="$1" i
+  local want_lc
+  want_lc="$(printf '%s' "$want" | tr '[:upper:]' '[:lower:]')"
+  for i in "${!MANUAL_M_ID[@]}"; do
+    local id_lc title_lc
+    id_lc="$(printf '%s' "${MANUAL_M_ID[$i]}" | tr '[:upper:]' '[:lower:]')"
+    title_lc="$(printf '%s' "${MANUAL_M_TITLE[$i]}" | tr '[:upper:]' '[:lower:]')"
+    if [ "$id_lc" = "$want_lc" ] || [ "$title_lc" = "$want_lc" ]; then
+      printf '%s\n' "$i"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# ---------------------------------------------------------------------------
+# Rendering
+# ---------------------------------------------------------------------------
+
+## @internal
+## @category Manual
+## @description Print a section heading underline of approximate width.
+## @arg $1 string Title text.
+_manual_section_rule() {
+  local title="$1"
+  local pad width=52
+  local len=${#title}
+  local fill=$((width - len - 3))
+  [ "$fill" -lt 1 ] && fill=1
+  printf -v pad '%*s' "$fill" ''
+  pad="${pad// /═}"
+  printf "${MANUAL_TITLE}══ %s %s${MANUAL_RESET}\n" "$title" "$pad"
+}
+
+## @internal
+## @category Manual
+## @description Render one compact command row.
+## @arg $1 integer Command index.
+_manual_render_command_row() {
+  local i="$1"
+  local marker desc
+
+  # Compact index: first line of description only.
+  desc="${MANUAL_C_DESC[$i]%%$'\n'*}"
+
+  if [ "${MANUAL_C_TYPE[$i]}" = "alias" ]; then
+    marker="→"
+    if [ -n "$desc" ]; then
+      printf "  ${MANUAL_NAME}%-22s${MANUAL_RESET} %s\n" "${MANUAL_C_NAME[$i]}" "$desc"
+      printf "  ${MANUAL_DIM}%-22s  → %s${MANUAL_RESET}\n" "" "${MANUAL_C_BODY[$i]}"
+    else
+      printf "  ${MANUAL_NAME}%-22s${MANUAL_ARROW} → ${MANUAL_RESET}%s\n" \
+        "${MANUAL_C_NAME[$i]}" "${MANUAL_C_BODY[$i]}"
+    fi
+  else
+    marker="ƒ"
+    if [ -n "$desc" ]; then
+      printf "  ${MANUAL_DIM}%s${MANUAL_RESET} ${MANUAL_NAME}%-20s${MANUAL_RESET} %s\n" \
+        "$marker" "${MANUAL_C_NAME[$i]}" "$desc"
+    else
+      printf "  ${MANUAL_DIM}%s${MANUAL_RESET} ${MANUAL_NAME}%-20s${MANUAL_RESET}\n" \
+        "$marker" "${MANUAL_C_NAME[$i]}"
+    fi
+  fi
+}
+
+## @internal
+## @category Manual
+## @description Print a labeled multi-line field block if non-empty.
+## @arg $1 string Field label.
+## @arg $2 string Field value (may be multi-line).
+_manual_render_field() {
+  local label="$1"
+  local value="$2"
+  local line
+  [ -n "$value" ] || return 0
+  printf "\n${MANUAL_BOLD}%s${MANUAL_RESET}\n" "$label"
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "$line" ] || continue
+    printf "  %s\n" "$line"
+  done <<<"$value"
+}
+
+## @internal
+## @category Manual
+## @description Render detailed documentation for one command.
+## @arg $1 integer Command index.
+_manual_render_command() {
+  local i="$1"
+  local mod_i title="Common" header
+
+  mod_i="$(_manual_mod_index "${MANUAL_C_MODULE[$i]}" 2>/dev/null || true)"
+  [ -n "$mod_i" ] && title="${MANUAL_M_TITLE[$mod_i]}"
+
+  if [ "${MANUAL_C_TYPE[$i]}" = "alias" ]; then
+    header="${MANUAL_C_NAME[$i]}"
+  else
+    header="${MANUAL_C_NAME[$i]}()"
+  fi
+
+  printf "${MANUAL_TITLE}%s${MANUAL_RESET}\n" "$header"
+
+  _manual_render_field "Module" "$title"
+  _manual_render_field "Category" "${MANUAL_C_CAT[$i]}"
+  _manual_render_field "Description" "${MANUAL_C_DESC[$i]}"
+  _manual_render_field "Usage" "${MANUAL_C_USAGE[$i]}"
+  _manual_render_field "Arguments" "${MANUAL_C_ARGS[$i]}"
+  _manual_render_field "Options" "${MANUAL_C_OPTIONS[$i]}"
+  _manual_render_field "Environment" "${MANUAL_C_ENV[$i]}"
+  _manual_render_field "Exit codes" "${MANUAL_C_EXIT[$i]}"
+  _manual_render_field "Stdin" "${MANUAL_C_STDIN[$i]}"
+  _manual_render_field "Stdout" "${MANUAL_C_STDOUT[$i]}"
+  _manual_render_field "Stderr" "${MANUAL_C_STDERR[$i]}"
+  _manual_render_field "Requires" "${MANUAL_C_REQ[$i]}"
+  _manual_render_field "Examples" "${MANUAL_C_EXAMPLES[$i]}"
+  _manual_render_field "See also" "${MANUAL_C_SEE[$i]}"
+  _manual_render_field "Tags" "${MANUAL_C_TAGS[$i]}"
+  if [ "${MANUAL_C_TYPE[$i]}" = "alias" ] && [ -n "${MANUAL_C_BODY[$i]}" ]; then
+    _manual_render_field "Expands to" "${MANUAL_C_BODY[$i]}"
+  fi
+  _manual_render_field "Source" "${MANUAL_C_SOURCE[$i]}"
+  printf "\n"
+}
+
+## @internal
+## @category Manual
+## @description Count visible (non-internal unless --all) commands for a module.
+## @arg $1 string Module id.
+## @arg $2 string Show internal (0/1).
+## @arg $3 string Mode: all|functions|aliases.
+_manual_module_cmd_count() {
+  local mid="$1" show_internal="$2" mode="$3"
+  local i count=0
+  for i in "${!MANUAL_C_NAME[@]}"; do
+    [ "${MANUAL_C_MODULE[$i]}" = "$mid" ] || continue
+    if [ "$show_internal" != "1" ] && [ "${MANUAL_C_INTERNAL[$i]}" = "1" ]; then
+      continue
+    fi
+    case "$mode" in
+      functions) [ "${MANUAL_C_TYPE[$i]}" = "function" ] || continue ;;
+      aliases) [ "${MANUAL_C_TYPE[$i]}" = "alias" ] || continue ;;
+    esac
+    count=$((count + 1))
+  done
+  printf '%s\n' "$count"
+}
+
+## @internal
+## @category Manual
+## @description Render module detail view with its public functions and aliases.
+## @arg $1 integer Module index.
+## @arg $2 string Show internal (0/1).
+## @arg $3 string Mode all|functions|aliases.
+_manual_render_module() {
+  local mi="$1"
+  local show_internal="$2"
+  local mode="${3:-all}"
+  local i
+  local -a funcs=() aliases=()
+  local src_display
+
+  printf "${MANUAL_TITLE}%s${MANUAL_RESET}\n" "${MANUAL_M_TITLE[$mi]}"
+  printf "${MANUAL_DIM}────────────────────────────────────────${MANUAL_RESET}\n"
+  if [ -n "${MANUAL_M_DESC[$mi]}" ]; then
+    printf "\n%s\n" "${MANUAL_M_DESC[$mi]}"
+  fi
+
+  _manual_render_field "Module ID" "${MANUAL_M_ID[$mi]}"
+  _manual_render_field "Category" "${MANUAL_M_CAT[$mi]}"
+  _manual_render_field "Requires" "${MANUAL_M_REQ[$mi]}"
+  _manual_render_field "Tags" "${MANUAL_M_TAGS[$mi]}"
+
+  for i in "${!MANUAL_C_NAME[@]}"; do
+    [ "${MANUAL_C_MODULE[$i]}" = "${MANUAL_M_ID[$mi]}" ] || continue
+    if [ "$show_internal" != "1" ] && [ "${MANUAL_C_INTERNAL[$i]}" = "1" ]; then
+      continue
+    fi
+    case "$mode" in
+      functions) [ "${MANUAL_C_TYPE[$i]}" = "function" ] || continue ;;
+      aliases) [ "${MANUAL_C_TYPE[$i]}" = "alias" ] || continue ;;
+    esac
+    if [ "${MANUAL_C_TYPE[$i]}" = "function" ]; then
+      funcs+=("$i")
+    else
+      aliases+=("$i")
+    fi
+  done
+
+  if [ "${#funcs[@]}" -gt 0 ]; then
+    printf "\n${MANUAL_BOLD}Functions${MANUAL_RESET}\n"
+    for i in "${funcs[@]}"; do
+      _manual_render_command_row "$i"
+    done
+  fi
+
+  if [ "${#aliases[@]}" -gt 0 ]; then
+    printf "\n${MANUAL_BOLD}Aliases${MANUAL_RESET}\n"
+    for i in "${aliases[@]}"; do
+      _manual_render_command_row "$i"
+    done
+  fi
+
+  if [ -n "${MANUAL_M_PATH[$mi]}" ]; then
+    src_display="$(_manual_relpath "${MANUAL_M_PATH[$mi]}")"
+    _manual_render_field "Source" "$src_display"
+  fi
+  printf "\n"
+}
+
+## @internal
+## @category Manual
+## @description Render the compact categorized/module-aware index.
+## @arg $1 string Optional search pattern.
+## @arg $2 string Mode all|functions|aliases.
+## @arg $3 string Show internal.
+## @arg $4 string Category filter.
+## @arg $5 string Module filter.
+## @stdout Index listing; sets MANUAL_LAST_COUNT.
+_manual_render_index() {
+  local pattern="$1" mode="$2" show_internal="$3" category="$4" module_filter="$5"
+  local mi i shown_mod count=0 any_in_mod
+  local -a matched_cmds=()
+
+  for i in "${!MANUAL_C_NAME[@]}"; do
+    _manual_cmd_matches "$i" "$pattern" "$mode" "$show_internal" "$category" "$module_filter" \
+      && matched_cmds+=("$i")
+  done
+
+  # When searching, also surface modules whose metadata matches even if no cmds do.
+  for mi in "${!MANUAL_M_ID[@]}"; do
+    any_in_mod=0
+    for i in "${matched_cmds[@]+"${matched_cmds[@]}"}"; do
+      if [ "${MANUAL_C_MODULE[$i]}" = "${MANUAL_M_ID[$mi]}" ]; then
+        any_in_mod=1
+        break
+      fi
+    done
+
+    if [ "$any_in_mod" -eq 0 ]; then
+      if [ -n "$pattern" ] && _manual_mod_matches "$mi" "$pattern" "$category" "$module_filter"; then
+        # Module metadata hit with no visible commands — still show the section header.
+        :
+      else
+        continue
+      fi
+    fi
+
+    # Skip empty modules when not searching by module metadata.
+    if [ "$any_in_mod" -eq 0 ] && [ -z "$pattern" ]; then
+      local pub
+      pub="$(_manual_module_cmd_count "${MANUAL_M_ID[$mi]}" "$show_internal" "$mode")"
+      [ "$pub" -gt 0 ] || continue
+    fi
+
+    printf "\n"
+    _manual_section_rule "${MANUAL_M_TITLE[$mi]}"
+    if [ -n "${MANUAL_M_DESC[$mi]}" ]; then
+      printf "\n  ${MANUAL_DIM}%s${MANUAL_RESET}\n\n" "${MANUAL_M_DESC[$mi]}"
+    else
+      printf "\n"
+    fi
+
+    for i in "${matched_cmds[@]+"${matched_cmds[@]}"}"; do
+      [ "${MANUAL_C_MODULE[$i]}" = "${MANUAL_M_ID[$mi]}" ] || continue
+      _manual_render_command_row "$i"
+      count=$((count + 1))
+    done
+  done
 
   MANUAL_LAST_COUNT=$count
 }
 
+## @internal
+## @category Manual
+## @description Print entry count footer.
+## @arg $1 integer Count.
+## @arg $2 string Optional label (default: entr(ies)).
+_manual_render_count() {
+  local count="$1"
+  local label="${2:-entr(ies)}"
+  printf "\n${MANUAL_DIM}%d %s${MANUAL_RESET}\n" "$count" "$label"
+}
+
+## @internal
+## @category Manual
+## @description Print manual CLI usage help.
+_manual_usage() {
+  cat <<'EOF'
+Usage: manual [options] [pattern]
+
+  manual                  Compact module-aware index
+  manual <pattern>        Search modules and commands
+  manual <exact-name>     Detailed command or module view
+
+Options:
+  --all                   Include @internal / _-prefixed helpers
+  --functions             Show functions only
+  --aliases               Show aliases only
+  --category <category>   Filter by command/module category
+  --module <module>       Filter by module id or title
+  --list                  Same as default index (explicit)
+  -h, --help              Show this help
+
+Environment:
+  MANUAL_ALL=1            Same as --all
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# Public entry points
+# ---------------------------------------------------------------------------
+
 # Show every loaded alias and function across common, role, and modules.
-# Usage: manual [pattern]
+# Usage: manual [options] [pattern]
 #        MANUAL_ALL=1 manual
+## @category Manual
+## @description Show a searchable manual of dotfiles modules, functions, and aliases.
+## @usage manual [options] [pattern]
+## @option --all Include internal helpers.
+## @option --functions Show functions only.
+## @option --aliases Show aliases only.
+## @option --category <category> Filter by category.
+## @option --module <module> Filter by module id or title.
+## @option --list Explicit compact index.
+## @option -h|--help Show usage.
+## @env MANUAL_ALL When set to 1, include internal helpers.
+## @example manual
+## @example manual vault
+## @example manual addcommitpush
+## @example MANUAL_ALL=1 manual
 manual() {
-  local pattern="${1:-}"
-  local file total=0
+  local pattern="" mode="all" show_internal="${MANUAL_ALL:-0}"
+  local category="" module_filter="" list_only=0
+  local exact_cmd exact_mod total=0
 
   if [ -z "${BASH_VERSION:-}" ]; then
     echo "manual: currently requires bash (open a bash shell or run: bash -ic manual)" >&2
     return 2
   fi
 
-  _manual_init_colors
+  # Clean argument parsing (no scattered positional checks).
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --all)
+        show_internal=1
+        shift
+        ;;
+      --functions)
+        mode="functions"
+        shift
+        ;;
+      --aliases)
+        mode="aliases"
+        shift
+        ;;
+      --category)
+        if [ -z "${2:-}" ]; then
+          echo "manual: --category requires an argument" >&2
+          return 2
+        fi
+        category="$2"
+        shift 2
+        ;;
+      --module)
+        if [ -z "${2:-}" ]; then
+          echo "manual: --module requires an argument" >&2
+          return 2
+        fi
+        module_filter="$2"
+        shift 2
+        ;;
+      --list)
+        list_only=1
+        shift
+        ;;
+      --fzf)
+        echo "manual: --fzf is reserved for a future interactive picker" >&2
+        return 2
+        ;;
+      -h|--help)
+        _manual_usage
+        return 0
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        echo "manual: unknown option: $1" >&2
+        _manual_usage >&2
+        return 2
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
 
-  printf "${MANUAL_TITLE}Dotfiles manual${MANUAL_RESET}"
+  # Remaining positional args form the search pattern.
+  if [ "$#" -gt 0 ]; then
+    pattern="$1"
+    shift
+    while [ "$#" -gt 0 ]; do
+      pattern="${pattern} $1"
+      shift
+    done
+  fi
+
+  _manual_init_colors
+  _manual_discover
+
+  printf "${MANUAL_TITLE}Dotfiles Manual${MANUAL_RESET}"
   if [ -n "${DOTFILES_ROLE:-}" ]; then
     printf "  ${MANUAL_DIM}(role=%s)${MANUAL_RESET}" "$DOTFILES_ROLE"
   fi
   printf "\n"
 
-  while IFS= read -r file; do
-    [ -n "$file" ] || continue
-    _manual_scan_file "$file" "$pattern" all
-    total=$((total + MANUAL_LAST_COUNT))
-  done < <(_manual_files)
+  # Exact command detail (prefer over search index / module detail).
+  if [ -n "$pattern" ] && [ "$list_only" -eq 0 ] && [ -z "$category" ] && [ -z "$module_filter" ]; then
+    if exact_cmd="$(_manual_find_exact_command "$pattern" "$show_internal")"; then
+      # If mode filters exclude this type, fall through to search.
+      local ok=1
+      case "$mode" in
+        functions) [ "${MANUAL_C_TYPE[$exact_cmd]}" = "function" ] || ok=0 ;;
+        aliases) [ "${MANUAL_C_TYPE[$exact_cmd]}" = "alias" ] || ok=0 ;;
+      esac
+      if [ "$ok" -eq 1 ]; then
+        printf "\n"
+        _manual_render_command "$exact_cmd"
+        return 0
+      fi
+    fi
+
+    if exact_mod="$(_manual_find_exact_module "$pattern")"; then
+      printf "\n"
+      _manual_render_module "$exact_mod" "$show_internal" "$mode"
+      return 0
+    fi
+  fi
+
+  _manual_render_index "$pattern" "$mode" "$show_internal" "$category" "$module_filter"
+  total=$MANUAL_LAST_COUNT
 
   if [ -n "$pattern" ] && [ "$total" -eq 0 ]; then
     echo "manual: no matches for: $pattern" >&2
     return 1
   fi
-  printf "\n${MANUAL_DIM}%d entr(ies)${MANUAL_RESET}\n" "$total"
+
+  _manual_render_count "$total"
 }
 
 # List aliases only (all modules).
 # Usage: aliases [pattern]
+## @category Manual
+## @description List documented aliases across common files and modules.
+## @usage aliases [pattern]
+## @example aliases
+## @example aliases vault
 aliases() {
   local pattern="${1:-}"
-  local file total=0
 
   if [ -z "${BASH_VERSION:-}" ]; then
     echo "aliases: currently requires bash (open a bash shell or run: bash -ic aliases)" >&2
     return 2
   fi
 
-  _manual_init_colors
-
-  while IFS= read -r file; do
-    [ -n "$file" ] || continue
-    _manual_scan_file "$file" "$pattern" aliases
-    total=$((total + MANUAL_LAST_COUNT))
-  done < <(_manual_files)
-
-  if [ -n "$pattern" ] && [ "$total" -eq 0 ]; then
-    echo "aliases: no matches for: $pattern" >&2
-    return 1
+  # Preserve historical aliases [pattern] while sharing the new pipeline.
+  if [ -n "$pattern" ]; then
+    manual --aliases -- "$pattern"
+  else
+    manual --aliases
   fi
-  printf "\n${MANUAL_DIM}%d alias(es)${MANUAL_RESET}\n" "$total"
 }

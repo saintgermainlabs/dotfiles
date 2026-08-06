@@ -47,6 +47,10 @@
 .dotfiles/modules/openclaw/
 {{- end }}
 
+{{- if not (dig "coolify-manager" false .modules) }}
+.dotfiles/modules/coolify-manager/
+{{- end }}
+
 {{- if not (dig "common" false .modules) }}
 .dotfiles/common/
 {{- end }}

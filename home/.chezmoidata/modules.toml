@@ -52,3 +52,7 @@ description = "Additive mise tools via ~/.config/mise/conf.d/dotfiles.toml (neve
 [modules.local_to_remote]
 enabled = true
 description = "Functions for managing remote server locally."
+
+[modules.coolify-manager]
+enabled = true
+description = "Coolify CLI helpers for finding and inspecting apps/services"

@@ -1,3 +1,12 @@
+## @module openclaw
+## @title OpenClaw
+## @description Provides shell commands for managing and interacting with OpenClaw.
+## @category AI & Automation
+## @requires openclaw
+## @tags openclaw ai agent gateway skills remote
+## @source functions.sh
+## @source aliases.sh
+
 # shellcheck shell=bash
 #
 # Source this file from Bash or Zsh to load the remote OpenClaw helpers.

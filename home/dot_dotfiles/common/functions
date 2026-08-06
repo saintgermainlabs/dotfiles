@@ -1,12 +1,27 @@
+
 # Common helper functions (bash and zsh).
 
-# Return success when a command is installed.
+## @description Checks whether a command is available in the current PATH.
+## @category Helpers
+## @arg $1 string The command name to check.
+## @exitcode 0 If the command is installed and available.
+## @exitcode 1 If the command cannot be found.
+## @see command(1)
 has() {
   command -v "$1" >/dev/null 2>&1
 }
 
-# Create a directory and cd into it.
-# Usage: mkcd <directory>
+## @description Creates a directory, including missing parent directories, and changes into it.
+## @category Helpers
+## @arg $1 string The directory path to create and enter.
+## @exitcode 0 If the directory was created or already existed and the directory change succeeded.
+## @exitcode 1 If mkdir or cd fails.
+## @exitcode 2 If exactly one argument is not provided.
+## @stderr Prints usage information when called with an invalid number of arguments.
+## @example
+##   mkcd ~/projects/example
+## @see mkdir(1)
+## @see cd(1)
 mkcd() {
   if [ "$#" -ne 1 ]; then
     printf 'Usage: mkcd <directory>\n' >&2
@@ -15,8 +30,17 @@ mkcd() {
   mkdir -p -- "$1" && cd -- "$1"
 }
 
-# Go up N directories (default 1).
-# Usage: up [positive-integer]
+## @description Moves upward through the directory hierarchy by a specified number of levels.
+## @category Helpers
+## @arg $1 integer Optional number of directory levels to ascend. Defaults to 1.
+## @exitcode 0 If the directory change succeeds.
+## @exitcode 1 If cd fails.
+## @exitcode 2 If the supplied argument is not a non-negative integer.
+## @stderr Prints usage information when the argument is invalid.
+## @example
+##   up
+##   up 3
+## @see cd(1)
 up() {
   local levels="${1:-1}"
   local destination=""
@@ -36,13 +60,41 @@ up() {
   cd -- "$destination"
 }
 
-# Create a gzip-compressed tarball named after a path.
-compress() { tar -czf "${1%/}.tar.gz" "${1%/}"; }
-# Extract a .tar.gz archive.
+## @description Creates a gzip-compressed tar archive from a file or directory.
+## @category Archives
+## @arg $1 string The path to archive. A trailing slash is removed when constructing the archive name.
+## @exitcode 0 If the archive is created successfully.
+## @exitcode 1 If tar fails.
+## @example
+##   compress ~/Documents
+##   # Creates ~/Documents.tar.gz
+## @see tar(1)
+compress() {
+  tar -czf "${1%/}.tar.gz" "${1%/}"
+}
+
+## @description Extracts a gzip-compressed tar archive into the current directory.
+## @arg $1 string The path to a .tar.gz or compatible gzip-compressed tar archive.
+## @see tar(1)
 alias decompress='tar -xzf'
 
-# Extract a common archive format by extension.
-# Usage: extract <archive>
+## @description Extracts an archive using the appropriate utility based on its filename extension.
+## @category Archives
+## @arg $1 string The archive file to extract.
+## @exitcode 0 If the archive is extracted successfully.
+## @exitcode 1 If the archive does not exist, its format is unsupported, or the extraction utility fails.
+## @exitcode 2 If exactly one argument is not provided.
+## @stderr Prints an error if the archive does not exist, the format is unsupported, or the argument count is invalid.
+## @example
+##   extract backup.tar.gz
+##   extract package.zip
+##   extract archive.7z
+## @see tar(1)
+## @see bunzip2(1)
+## @see gunzip(1)
+## @see unxz(1)
+## @see unzip(1)
+## @see 7z(1)
 extract() {
   if [ "$#" -ne 1 ]; then
     printf 'Usage: extract <archive>\n' >&2
@@ -73,9 +125,20 @@ extract() {
   esac
 }
 
-# Activate a Python virtualenv found in the current tree (.venv, venv, …).
+## @description Activates a Python virtual environment found in the current directory.
+## @description Searches for .venv, venv, .env, and env directories containing bin/activate.
+## @category Python Helpers
+## @exitcode 0 If exactly one virtual environment is found and activated successfully.
+## @exitcode 1 If no virtual environment is found, multiple environments are found, or activation fails.
+## @stdout May print output produced by the virtual environment activation script.
+## @stderr Prints an error when no environment or multiple environments are found.
+## @example
+##   cd ~/projects/my-project
+##   venv
+## @see python(1)
 venv() {
   local candidate candidates=()
+
   for candidate in .venv venv .env env; do
     if [ -f "$candidate/bin/activate" ]; then
       candidates+=("$candidate")
@@ -98,7 +161,17 @@ venv() {
 
 # SSH Related Functions
 
-# Generate a new SSH deploy key
+## @description Generates a new Ed25519 SSH deploy key without a passphrase.
+## @description Stores deploy keys under ~/.ssh/deploy-keys and prints the public key after creation.
+## @category SSH
+## @arg $1 string A unique name for the deploy key.
+## @exitcode 0 If the SSH key is generated successfully.
+## @exitcode 1 If no key name is supplied, the key already exists, or key generation fails.
+## @stdout Prints status information, the generated public key, and the private key location.
+## @example
+##   new_deploy_key github-my-project
+## @see ssh-keygen(1)
+## @see chmod(1)
 new_deploy_key() {
     local key_name="$1"
     local key_dir="$HOME/.ssh/deploy-keys"
@@ -142,28 +215,96 @@ new_deploy_key() {
 }
 
 
-
-
-
 # Git Related Functions
 
-function addcommitpush () {
+## @description Stages all Git changes, creates a commit, and interactively pushes the current branch to origin.
+## @category Git
+## @arg $@ string The commit message. All supplied arguments are combined into the commit message.
+## @exitcode 0 If the commit succeeds and the push succeeds, or if the user chooses not to push.
+## @exitcode 1 If the current directory is not a Git repository or a Git operation fails.
+## @exitcode 2 If no commit message is provided.
+## @stdin Prompts for the destination branch and confirmation before pushing.
+## @stdout Prints Git command output, the destination branch prompt, and push confirmation.
+## @stderr Prints validation and Git errors.
+## @example
+##   addcommitpush Update server provisioning scripts
+## @example
+##   addcommitpush "Add Tailscale diagnostic functions"
+## @see git(1)
+## @see git-add(1)
+## @see git-commit(1)
+## @see git-push(1)
+addcommitpush() {
+  local message
+  local current
+  local branch
+  local yn
 
-  current=$(git branch | grep "*" | cut -b 3-)
-
-  message=\'"$@"\'
-  git add -A && git commit -a -m "$message"
-
-  echo "Where to push?"
-  read -i "$current" -e branch
-
-  echo "You sure you wanna push? (y/n)"
-  read -i "y" -e yn
-
-  if [ "$yn" = y ]; then
-    git push origin "$branch"
-  else
-    echo "Have a nice day!"
+  # Ensure we are inside a Git repository.
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "Error: Not inside a Git repository." >&2
+    return 1
   fi
 
+  # Require a commit message.
+  if [ "$#" -eq 0 ]; then
+    echo "Usage: addcommitpush <commit-message>" >&2
+    return 2
+  fi
+
+  message="$*"
+
+  # Determine the currently checked-out branch.
+  current="$(git branch --show-current)"
+
+  if [ -z "$current" ]; then
+    echo "Error: Unable to determine the current Git branch." >&2
+    return 1
+  fi
+
+  # Stage all changes.
+  echo "Staging changes..."
+  if ! git add -A; then
+    echo "Error: Failed to stage changes." >&2
+    return 1
+  fi
+
+  # Make sure there is actually something to commit.
+  if git diff --cached --quiet; then
+    echo "Nothing to commit."
+    return 0
+  fi
+
+  # Create the commit.
+  echo "Creating commit: $message"
+  if ! git commit -m "$message"; then
+    echo "Error: Commit failed." >&2
+    return 1
+  fi
+
+  # Default to the current branch.
+  echo
+  read -r -e -i "$current" -p "Branch to push: " branch
+
+  # Empty input still falls back to the current branch.
+  branch="${branch:-$current}"
+
+  echo
+  read -r -e -i "y" -p "Push to origin/$branch? (y/n): " yn
+
+  case "$yn" in
+    y|Y|yes|YES|Yes)
+      echo "Pushing to origin/$branch..."
+
+      if ! git push origin "$branch"; then
+        echo "Error: Push failed." >&2
+        return 1
+      fi
+
+      echo "Successfully pushed to origin/$branch."
+      ;;
+    *)
+      echo "Commit created locally; push skipped."
+      ;;
+  esac
 }

@@ -1,7 +1,21 @@
 # shellcheck shell=bash
 #
-# Source this file from Bash or Zsh to load the HashiCorp Vault helpers.
+# HashiCorp Vault dotfiles module.
 
+## @module hashicorp-vault
+## @title HashiCorp Vault
+## @description Loads shell functions and interactive aliases for working with HashiCorp Vault.
+## @category Security
+## @requires vault
+## @tags vault hashicorp secrets credentials security
+## @source functions.sh
+## @source aliases.sh
+
+# ---------------------------------------------------------------------------
+# Module initialization
+# ---------------------------------------------------------------------------
+
+# Determine the directory containing this module.
 if [ -n "${BASH_VERSION:-}" ]; then
   _vault_module_file="${BASH_SOURCE[0]}"
 elif [ -n "${ZSH_VERSION:-}" ]; then
@@ -10,11 +24,22 @@ else
   _vault_module_file="$0"
 fi
 
-_vault_module_dir="$(CDPATH= cd -- "$(dirname -- "$_vault_module_file")" && pwd)"
+_vault_module_dir="$(
+  CDPATH= cd -- "$(dirname -- "$_vault_module_file")" && pwd
+)"
+
+# ---------------------------------------------------------------------------
+# Functions
+# ---------------------------------------------------------------------------
 
 # shellcheck source=functions.sh
 . "$_vault_module_dir/functions.sh"
 
+# ---------------------------------------------------------------------------
+# Interactive aliases
+# ---------------------------------------------------------------------------
+
+# Aliases are only needed in interactive shells.
 case $- in
   *i*)
     # shellcheck source=aliases.sh
@@ -22,5 +47,8 @@ case $- in
     ;;
 esac
 
-unset _vault_module_file _vault_module_dir
+# ---------------------------------------------------------------------------
+# Cleanup
+# ---------------------------------------------------------------------------
 
+unset _vault_module_file _vault_module_dir
