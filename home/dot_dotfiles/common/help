@@ -50,13 +50,17 @@ declare -a MANUAL_C_BODY=()
 _manual_init_colors() {
   if [ -t 1 ]; then
     MANUAL_TITLE=$'\033[1;35m'
+    MANUAL_FN=$'\033[1;36m'
+    MANUAL_ALIAS=$'\033[1;33m'
     MANUAL_NAME=$'\033[1;33m'
+    MANUAL_BOX=$'\033[2;34m'
     MANUAL_ARROW=$'\033[2;37m'
     MANUAL_DIM=$'\033[2m'
     MANUAL_BOLD=$'\033[1m'
     MANUAL_RESET=$'\033[0m'
   else
-    MANUAL_TITLE="" MANUAL_NAME="" MANUAL_ARROW="" MANUAL_DIM="" MANUAL_BOLD="" MANUAL_RESET=""
+    MANUAL_TITLE="" MANUAL_FN="" MANUAL_ALIAS="" MANUAL_NAME=""
+    MANUAL_BOX="" MANUAL_ARROW="" MANUAL_DIM="" MANUAL_BOLD="" MANUAL_RESET=""
   fi
 }
 
@@ -284,7 +288,8 @@ _manual_parse_command_block() {
             pending="example"
           fi
           ;;
-        module|title|source|name|returns) ;; # ignore module-level / legacy extras
+        name|returns) ;; # legacy shdoc fields — name/returns are non-standard here
+        module|title|source) ;; # module-level; ignore on commands
         *) ;; # unknown — do not crash
       esac
       continue
@@ -293,6 +298,8 @@ _manual_parse_command_block() {
     if [ "$pending" = "example" ]; then
       [ -z "$stripped" ] && continue
       stripped="${stripped#"${stripped%%[![:space:]]*}"}"
+      # Skip indented continuation markers that are not examples.
+      [[ "$stripped" =~ ^@ ]] && { pending=""; continue; }
       _pb_examples+=("$stripped")
       continue
     fi
@@ -317,6 +324,11 @@ _manual_parse_command_block() {
     _manual_join_lines _pb_desc_lines out_desc
   fi
   [ -n "$out_desc" ] || out_desc="$free_desc"
+
+  # Prefer explicit @usage; fall back to first @example line.
+  if [ -z "$out_usage" ] && [ -n "$_pb_examples" ]; then
+    out_usage="${_pb_examples[0]}"
+  fi
 
   _manual_join_lines _pb_args out_args
   _manual_join_lines _pb_options out_options
@@ -392,6 +404,12 @@ _manual_scan_command_file() {
       continue
     fi
 
+    # Blank lines belong to the preceding documentation block.
+    if [[ -z "${line//[[:space:]]/}" ]]; then
+      comment_block+=$'\n'
+      continue
+    fi
+
     if [[ "$line" =~ ^[[:space:]]*alias[[:space:]]+([^=[:space:]]+)=(.*)$ ]]; then
       nm="${BASH_REMATCH[1]}"
       body="${BASH_REMATCH[2]}"
@@ -435,7 +453,7 @@ _manual_scan_command_file() {
       continue
     fi
 
-    [[ -z "${line//[[:space:]]/}" ]] || comment_block=""
+    comment_block=""
   done < "$file"
 }
 
@@ -596,7 +614,7 @@ _manual_cmd_matches() {
   esac
 
   if [ -n "$category" ]; then
-    grep -qi -- "^${category}$" <<<"${MANUAL_C_CAT[$i]}" || return 1
+    _manual_category_matches "${MANUAL_C_CAT[$i]}" "$category" || return 1
   fi
 
   if [ -n "$module_filter" ]; then
@@ -686,6 +704,89 @@ _manual_find_exact_module() {
 
 ## @internal
 ## @category Manual
+## @description Normalize a command category label for grouping and display.
+## @arg $1 string Raw category from annotations.
+_manual_display_category() {
+  local cat="${1:-}"
+  cat="${cat#"${cat%%[![:space:]]*}"}"
+  cat="${cat%"${cat##*[![:space:]]}"}"
+  if [ -z "$cat" ]; then
+    printf 'Uncategorized'
+    return 0
+  fi
+  # Title-case the first character for nicer headings (docker -> Docker).
+  printf '%s' "${cat^}"
+}
+
+## @internal
+## @category Manual
+## @description Return 0 if a command category matches a display category (case-insensitive).
+## @arg $1 string Command category.
+## @arg $2 string Display category label.
+_manual_category_matches() {
+  local raw="$1" want="$2"
+  local got
+  got="$(_manual_display_category "$raw")"
+  [ "$(printf '%s' "$got" | tr '[:upper:]' '[:lower:]')" \
+    = "$(printf '%s' "$want" | tr '[:upper:]' '[:lower:]')" ]
+}
+
+## @internal
+## @category Manual
+## @description Collect sorted unique display categories for command indices.
+## @arg $1 string Name of array variable holding command indices.
+## @arg $2 string Name of output array variable for category labels.
+_manual_collect_categories() {
+  local -n _cc_cmds="$1"
+  local -n _cc_out="$2"
+  local i cat seen="|"
+
+  _cc_out=()
+  for i in "${_cc_cmds[@]+"${_cc_cmds[@]}"}"; do
+    cat="$(_manual_display_category "${MANUAL_C_CAT[$i]}")"
+    case "$seen" in *"|${cat}|"*) continue ;; esac
+    seen="${seen}${cat}|"
+    _cc_out+=("$cat")
+  done
+
+  if ((${#_cc_out[@]} > 1)); then
+    local sorted
+    sorted="$(printf '%s\n' "${_cc_out[@]}" | LC_ALL=C sort -f)"
+    _cc_out=()
+    while IFS= read -r cat || [ -n "$cat" ]; do
+      [ -n "$cat" ] || continue
+      _cc_out+=("$cat")
+    done <<<"$sorted"
+  fi
+}
+
+## @internal
+## @category Manual
+## @description Draw the top border of a category box.
+## @arg $1 string Category title.
+_manual_box_top() {
+  local title="$1"
+  local width=66
+  local fill=$((width - ${#title} - 5))
+  [ "$fill" -lt 1 ] && fill=1
+  printf -v _manual_pad '%*s' "$fill" ''
+  _manual_pad="${_manual_pad// /─}"
+  printf "${MANUAL_BOX}╭─ ${MANUAL_BOLD}%s${MANUAL_RESET}${MANUAL_BOX} %s╮${MANUAL_RESET}\n" \
+    "$title" "$_manual_pad"
+}
+
+## @internal
+## @category Manual
+## @description Draw the bottom border of a category box.
+_manual_box_bottom() {
+  local width=66
+  printf -v _manual_pad '%*s' "$width" ''
+  _manual_pad="${_manual_pad// /─}"
+  printf "${MANUAL_BOX}╰%s╯${MANUAL_RESET}\n" "$_manual_pad"
+}
+
+## @internal
+## @category Manual
 ## @description Print a section heading underline of approximate width.
 ## @arg $1 string Title text.
 _manual_section_rule() {
@@ -701,33 +802,44 @@ _manual_section_rule() {
 
 ## @internal
 ## @category Manual
-## @description Render one compact command row.
+## @description Render one compact command row inside a category box.
 ## @arg $1 integer Command index.
 _manual_render_command_row() {
   local i="$1"
-  local marker desc
+  local desc usage mod_i mod_label name_color type_label
 
-  # Compact index: first line of description only.
   desc="${MANUAL_C_DESC[$i]%%$'\n'*}"
+  usage="${MANUAL_C_USAGE[$i]}"
+  mod_i="$(_manual_mod_index "${MANUAL_C_MODULE[$i]}" 2>/dev/null || true)"
+  mod_label=""
+  [ -n "$mod_i" ] && mod_label="${MANUAL_M_TITLE[$mod_i]}"
 
   if [ "${MANUAL_C_TYPE[$i]}" = "alias" ]; then
-    marker="→"
-    if [ -n "$desc" ]; then
-      printf "  ${MANUAL_NAME}%-22s${MANUAL_RESET} %s\n" "${MANUAL_C_NAME[$i]}" "$desc"
-      printf "  ${MANUAL_DIM}%-22s  → %s${MANUAL_RESET}\n" "" "${MANUAL_C_BODY[$i]}"
+    name_color="$MANUAL_ALIAS"
+    type_label="${MANUAL_DIM}alias${MANUAL_RESET}"
+  else
+    name_color="$MANUAL_FN"
+    type_label="${MANUAL_DIM}fn${MANUAL_RESET}"
+  fi
+
+  if [ -n "$desc" ]; then
+    if [ -n "$mod_label" ]; then
+      printf "  %b  %b%-18s%b  ${MANUAL_DIM}[%s]%b  %s\n" \
+        "$type_label" "$name_color" "${MANUAL_C_NAME[$i]}" "$MANUAL_RESET" \
+        "$mod_label" "$MANUAL_RESET" "$desc"
     else
-      printf "  ${MANUAL_NAME}%-22s${MANUAL_ARROW} → ${MANUAL_RESET}%s\n" \
-        "${MANUAL_C_NAME[$i]}" "${MANUAL_C_BODY[$i]}"
+      printf "  %b  %b%-18s%b  %s\n" \
+        "$type_label" "$name_color" "${MANUAL_C_NAME[$i]}" "$MANUAL_RESET" "$desc"
     fi
   else
-    marker="ƒ"
-    if [ -n "$desc" ]; then
-      printf "  ${MANUAL_DIM}%s${MANUAL_RESET} ${MANUAL_NAME}%-20s${MANUAL_RESET} %s\n" \
-        "$marker" "${MANUAL_C_NAME[$i]}" "$desc"
-    else
-      printf "  ${MANUAL_DIM}%s${MANUAL_RESET} ${MANUAL_NAME}%-20s${MANUAL_RESET}\n" \
-        "$marker" "${MANUAL_C_NAME[$i]}"
-    fi
+    printf "  %b  %b%s%b\n" \
+      "$type_label" "$name_color" "${MANUAL_C_NAME[$i]}" "$MANUAL_RESET"
+  fi
+
+  if [ "${MANUAL_C_TYPE[$i]}" = "alias" ] && [ -n "${MANUAL_C_BODY[$i]}" ]; then
+    printf "  ${MANUAL_DIM}%-22s  → %s${MANUAL_RESET}\n" "" "${MANUAL_C_BODY[$i]}"
+  elif [ -n "$usage" ] && [ "$usage" != "${MANUAL_C_NAME[$i]}" ]; then
+    printf "  ${MANUAL_DIM}%-22s  usage: %s${MANUAL_RESET}\n" "" "$usage"
   fi
 }
 
@@ -761,11 +873,13 @@ _manual_render_command() {
 
   if [ "${MANUAL_C_TYPE[$i]}" = "alias" ]; then
     header="${MANUAL_C_NAME[$i]}"
+    printf "${MANUAL_ALIAS}%s${MANUAL_RESET}" "$header"
   else
     header="${MANUAL_C_NAME[$i]}()"
+    printf "${MANUAL_FN}%s${MANUAL_RESET}" "$header"
   fi
-
-  printf "${MANUAL_TITLE}%s${MANUAL_RESET}\n" "$header"
+  printf "\n"
+  printf "${MANUAL_DIM}────────────────────────────────────────${MANUAL_RESET}\n"
 
   _manual_render_field "Module" "$title"
   _manual_render_field "Category" "${MANUAL_C_CAT[$i]}"
@@ -822,8 +936,8 @@ _manual_render_module() {
   local mi="$1"
   local show_internal="$2"
   local mode="${3:-all}"
-  local i
-  local -a funcs=() aliases=()
+  local i cat
+  local -a funcs=() categories=() in_cat=()
   local src_display
 
   printf "${MANUAL_TITLE}%s${MANUAL_RESET}\n" "${MANUAL_M_TITLE[$mi]}"
@@ -846,26 +960,20 @@ _manual_render_module() {
       functions) [ "${MANUAL_C_TYPE[$i]}" = "function" ] || continue ;;
       aliases) [ "${MANUAL_C_TYPE[$i]}" = "alias" ] || continue ;;
     esac
-    if [ "${MANUAL_C_TYPE[$i]}" = "function" ]; then
-      funcs+=("$i")
-    else
-      aliases+=("$i")
-    fi
+    funcs+=("$i")
   done
 
-  if [ "${#funcs[@]}" -gt 0 ]; then
-    printf "\n${MANUAL_BOLD}Functions${MANUAL_RESET}\n"
-    for i in "${funcs[@]}"; do
-      _manual_render_command_row "$i"
-    done
-  fi
+  _manual_collect_categories funcs categories
 
-  if [ "${#aliases[@]}" -gt 0 ]; then
-    printf "\n${MANUAL_BOLD}Aliases${MANUAL_RESET}\n"
-    for i in "${aliases[@]}"; do
-      _manual_render_command_row "$i"
+  for cat in "${categories[@]+"${categories[@]}"}"; do
+    in_cat=()
+    for i in "${funcs[@]}"; do
+      _manual_category_matches "${MANUAL_C_CAT[$i]}" "$cat" && in_cat+=("$i")
     done
-  fi
+    [ "${#in_cat[@]}" -gt 0 ] || continue
+    printf "\n"
+    _manual_render_category_box "$cat" "${in_cat[@]}"
+  done
 
   if [ -n "${MANUAL_M_PATH[$mi]}" ]; then
     src_display="$(_manual_relpath "${MANUAL_M_PATH[$mi]}")"
@@ -876,7 +984,27 @@ _manual_render_module() {
 
 ## @internal
 ## @category Manual
-## @description Render the compact categorized/module-aware index.
+## @description Render a bordered box of commands for one category.
+## @arg $1 string Category title.
+## @arg $@ integer Command indices to include.
+_manual_render_category_box() {
+  local category="$1"
+  shift
+  local -a indices=("$@")
+  local i
+
+  [ "${#indices[@]}" -gt 0 ] || return 0
+
+  _manual_box_top "$category"
+  for i in "${indices[@]}"; do
+    _manual_render_command_row "$i"
+  done
+  _manual_box_bottom
+}
+
+## @internal
+## @category Manual
+## @description Render the compact categorized index grouped by @category boxes.
 ## @arg $1 string Optional search pattern.
 ## @arg $2 string Mode all|functions|aliases.
 ## @arg $3 string Show internal.
@@ -885,53 +1013,25 @@ _manual_render_module() {
 ## @stdout Index listing; sets MANUAL_LAST_COUNT.
 _manual_render_index() {
   local pattern="$1" mode="$2" show_internal="$3" category="$4" module_filter="$5"
-  local mi i shown_mod count=0 any_in_mod
-  local -a matched_cmds=()
+  local i count=0 cat
+  local -a matched_cmds=() categories=() in_cat=()
 
   for i in "${!MANUAL_C_NAME[@]}"; do
     _manual_cmd_matches "$i" "$pattern" "$mode" "$show_internal" "$category" "$module_filter" \
       && matched_cmds+=("$i")
   done
 
-  # When searching, also surface modules whose metadata matches even if no cmds do.
-  for mi in "${!MANUAL_M_ID[@]}"; do
-    any_in_mod=0
+  _manual_collect_categories matched_cmds categories
+
+  for cat in "${categories[@]+"${categories[@]}"}"; do
+    in_cat=()
     for i in "${matched_cmds[@]+"${matched_cmds[@]}"}"; do
-      if [ "${MANUAL_C_MODULE[$i]}" = "${MANUAL_M_ID[$mi]}" ]; then
-        any_in_mod=1
-        break
-      fi
+      _manual_category_matches "${MANUAL_C_CAT[$i]}" "$cat" && in_cat+=("$i")
     done
-
-    if [ "$any_in_mod" -eq 0 ]; then
-      if [ -n "$pattern" ] && _manual_mod_matches "$mi" "$pattern" "$category" "$module_filter"; then
-        # Module metadata hit with no visible commands — still show the section header.
-        :
-      else
-        continue
-      fi
-    fi
-
-    # Skip empty modules when not searching by module metadata.
-    if [ "$any_in_mod" -eq 0 ] && [ -z "$pattern" ]; then
-      local pub
-      pub="$(_manual_module_cmd_count "${MANUAL_M_ID[$mi]}" "$show_internal" "$mode")"
-      [ "$pub" -gt 0 ] || continue
-    fi
-
+    [ "${#in_cat[@]}" -gt 0 ] || continue
     printf "\n"
-    _manual_section_rule "${MANUAL_M_TITLE[$mi]}"
-    if [ -n "${MANUAL_M_DESC[$mi]}" ]; then
-      printf "\n  ${MANUAL_DIM}%s${MANUAL_RESET}\n\n" "${MANUAL_M_DESC[$mi]}"
-    else
-      printf "\n"
-    fi
-
-    for i in "${matched_cmds[@]+"${matched_cmds[@]}"}"; do
-      [ "${MANUAL_C_MODULE[$i]}" = "${MANUAL_M_ID[$mi]}" ] || continue
-      _manual_render_command_row "$i"
-      count=$((count + 1))
-    done
+    _manual_render_category_box "$cat" "${in_cat[@]}"
+    count=$((count + ${#in_cat[@]}))
   done
 
   MANUAL_LAST_COUNT=$count
@@ -1079,6 +1179,10 @@ manual() {
   printf "${MANUAL_TITLE}Dotfiles Manual${MANUAL_RESET}"
   if [ -n "${DOTFILES_ROLE:-}" ]; then
     printf "  ${MANUAL_DIM}(role=%s)${MANUAL_RESET}" "$DOTFILES_ROLE"
+  fi
+  if [ -t 1 ] && [ -z "$pattern" ] && [ "$list_only" -eq 0 ]; then
+    printf "\n${MANUAL_DIM}  %bfn${MANUAL_RESET} functions  ${MANUAL_DIM}%balias${MANUAL_RESET} aliases  │  grouped by category" \
+      "$MANUAL_FN" "$MANUAL_ALIAS"
   fi
   printf "\n"
 

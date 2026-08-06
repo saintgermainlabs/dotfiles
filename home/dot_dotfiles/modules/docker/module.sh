@@ -8,8 +8,28 @@
 ## @tags docker container containers images compose
 ## @source functions.sh
 
-# Source remote helpers if available
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-if [ -f "${SCRIPT_DIR}/../../remote/remote_helpers.sh" ]; then
-    . "${SCRIPT_DIR}/../../remote/remote_helpers.sh"
+# shellcheck shell=bash
+
+if [ -n "${BASH_VERSION:-}" ]; then
+  _docker_module_file="${BASH_SOURCE[0]}"
+elif [ -n "${ZSH_VERSION:-}" ]; then
+  # shellcheck disable=SC2296
+  _docker_module_file="${(%):-%N}"
+else
+  _docker_module_file="$0"
 fi
+
+_docker_module_dir="$(
+  CDPATH= cd -- "$(dirname -- "$_docker_module_file")" && pwd
+)"
+
+# Source remote helpers if available
+if [ -f "${_docker_module_dir}/../../remote/remote_helpers.sh" ]; then
+  # shellcheck disable=SC1091
+  . "${_docker_module_dir}/../../remote/remote_helpers.sh"
+fi
+
+# shellcheck source=functions.sh
+. "${_docker_module_dir}/functions.sh"
+
+unset _docker_module_file _docker_module_dir
