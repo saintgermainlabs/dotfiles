@@ -9,73 +9,204 @@ has() {
 if has eza; then
   _EZA='eza --color=always --icons=auto --group-directories-first'
   # Short eza listing with icons.
+  ## @category File System
+  ## @description List files and directories with icons in a compact view
+  ## @usage l
+  ## @requires eza
+  ## @see eza(1)
   alias l="$_EZA"
   # Long eza listing with git status.
+  ## @category File System
+  ## @description List files and directories in long format with git status and human-readable sizes
+  ## @usage ll
+  ## @requires eza
+  ## @see eza(1)
   alias ll="$_EZA -l --git -h"
   # eza listing including hidden files.
+  ## @category File System
+  ## @description List all files and directories including hidden ones
+  ## @usage la
+  ## @requires eza
+  ## @see eza(1)
   alias la="$_EZA -a"
   # Long eza listing including hidden files.
+  ## @category File System
+  ## @description List all files and directories in long format including hidden ones with git status and human-readable sizes
+  ## @usage lla
+  ## @requires eza
+  ## @see eza(1)
   alias lla="$_EZA -a -l --git -h"
   # eza as ls replacement.
+  ## @category File System
+  ## @description Replace ls with eza showing long format, grouping directories first, and showing icons
+  ## @usage ls
+  ## @requires eza
+  ## @see eza(1)
   alias ls='eza -lh --group-directories-first --icons=auto'
   # Tree view two levels deep.
+  ## @category File System
+  ## @description Show a tree view of files and directories up to 2 levels deep with details
+  ## @usage lt
+  ## @requires eza
+  ## @see eza(1)
   alias lt='eza --tree --level=2 --long --icons --git'
   unset _EZA
 fi
 
 if has bat; then
   # Syntax-highlighted cat via bat.
+  ## @category File System
+  ## @description Display file contents with syntax highlighting without paging
+  ## @usage cat [file...]
+  ## @requires bat
+  ## @see bat(1)
   alias cat='bat --paging=never'
 elif has batcat; then
   # Ubuntu bat package name.
+  ## @category File System
+  ## @description Ubuntu-specific alias for batcat command
+  ## @usage bat
+  ## @requires batcat
+  ## @see batcat(1)
   alias bat='batcat'
   # Syntax-highlighted cat via batcat.
+  ## @category File System
+  ## @description Display file contents with syntax highlighting without paging using batcat
+  ## @usage cat [file...]
+  ## @requires batcat
+  ## @see batcat(1)
   alias cat='batcat --paging=never'
 fi
 
 # Go up one directory.
+## @category Navigation
+## @description Navigate up one directory level
+## @usage ..
+## @see cd(1)
 alias ..='cd ..'
 # Go up two directories.
+## @category Navigation
+## @description Navigate up two directory levels
+## @usage ...
+## @see cd(1)
 alias ...='cd ../..'
 # Go up three directories.
+## @category Navigation
+## @description Navigate up three directory levels
+## @usage ....
+## @see cd(1)
 alias ....='cd ../../..'
 # Create parent directories as needed.
+## @category File System
+## @description Create directory and any necessary parent directories
+## @usage md directory_name
+## @see mkdir(1)
 alias md='mkdir -p'
 # Remove an empty directory.
+## @category File System
+## @description Remove an empty directory
+## @usage rd directory_name
+## @see rmdir(1)
 alias rd='rmdir'
 
+## @category Text Processing
+## @description Search for patterns in files with colored output
+## @usage grep [options] pattern [file...]
+## @see grep(1)
 alias grep='grep --color=auto'
+## @category Text Processing
+## @description Search for patterns using extended regular expressions with colored output
+## @usage egrep [options] pattern [file...]
+## @see grep(1)
 alias egrep='egrep --color=auto'
+## @category Text Processing
+## @description Search for fixed strings in files with colored output
+## @usage fgrep [options] string [file...]
+## @see grep(1)
 alias fgrep='fgrep --color=auto'
 
 # Open Neovim on a path, or the current directory when called with no args.
+## @category Editor
+## @description Open Neovim with specified files or current directory
+## @usage n [file|directory...]
+## @requires nvim
 n() { if [ "$#" -eq 0 ]; then nvim .; else nvim "$@"; fi; }
 # Shorthand for git.
+## @category Git
+## @description Short alias for git command
+## @usage g [git_command...]
+## @requires git
+## @see git(1)
 alias g='git'
 # Shorthand for docker.
+## @category Containerization
+## @description Short alias for docker command
+## @usage d [docker_command...]
+## @requires docker
+## @see docker(1)
 alias d='docker'
 
 # Commit with a message.
+## @category Git
+## @description Create a new git commit with a message
+## @usage gcm "commit message"
+## @requires git
+## @see git-commit(1)
 alias gcm='git commit -m'
 # Stage all changes and commit with a message.
+## @category Git
+## @description Stage all changes and create a new git commit with a message
+## @usage gcam "commit message"
+## @requires git
+## @see git-commit(1)
 alias gcam='git commit -a -m'
 # Stage all changes and amend the previous commit.
+## @category Git
+## @description Stage all changes and amend the previous git commit
+## @usage gcad
+## @requires git
+## @see git-commit(1)
 alias gcad='git commit -a --amend'
 
 if has gh; then
   # Open the current PR in the browser.
+  ## @category Git
+  ## @description Open the current pull request in the web browser
+  ## @usage ghpr
+  ## @requires gh
+  ## @see gh-pr(1)
   alias ghpr='gh pr view --web'
   # List pull requests.
+  ## @category Git
+  ## @description List pull requests for the current repository
+  ## @usage ghprs
+  ## @requires gh
+  ## @see gh-pr(1)
   alias ghprs='gh pr list'
   # Open the repo in the browser.
+  ## @category Git
+  ## @description Open the current repository in the web browser
+  ## @usage ghrepo
+  ## @requires gh
+  ## @see gh-repo(1)
   alias ghrepo='gh repo view --web'
 fi
 
 if has lazygit; then
   # Launch lazygit.
+  ## @category Git
+  ## @description Launch the lazygit terminal UI for git
+  ## @usage lzg
+  ## @requires lazygit
+  ## @see lazygit(1)
   alias lzg='lazygit'
 fi
 if has lazydocker; then
   # Launch lazydocker.
+  ## @category Containerization
+  ## @description Launch the lazydocker terminal UI for docker
+  ## @usage lzd
+  ## @requires lazydocker
+  ## @see lazydocker(1)
   alias lzd='lazydocker'
 fi
