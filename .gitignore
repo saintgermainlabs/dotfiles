@@ -2,3 +2,6 @@
 *.local
 .env
 **/dot_env/.env
+.env.*
+mise.local.toml
+.aider*

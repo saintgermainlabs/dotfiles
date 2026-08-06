@@ -1,7 +1,7 @@
 {
   "meta": {
     "lastTouchedVersion": "2026.7.1",
-    "lastTouchedAt": "2026-08-04T06:24:47.596Z"
+    "lastTouchedAt": "2026-08-06T07:49:02.771Z"
   },
   "wizard": {
     "lastRunAt": "2026-08-04T02:21:34.801Z",
@@ -38,17 +38,17 @@
         "primary": "openrouter/google/gemini-2.5-flash"
       },
       "workspace": "/workspace",
-        "sandbox": {
-          "mode": "off",
-          "scope": "agent",
-          "workspaceAccess": "rw",
-          "docker": {
-            "binds": [
-              "/srv/openclaw/sandbox:/sandbox:rw"
-            ],
-            "dangerouslyAllowExternalBindSources": true
-          }
-        },
+      "sandbox": {
+        "mode": "off",
+        "scope": "agent",
+        "workspaceAccess": "rw",
+        "docker": {
+          "binds": [
+            "/srv/openclaw/sandbox:/sandbox:rw"
+          ],
+          "dangerouslyAllowExternalBindSources": true
+        }
+      },
       "maxConcurrent": 3,
       "subagents": {
         "maxConcurrent": 4,
@@ -62,12 +62,6 @@
   "commands": {
     "native": "auto",
     "nativeSkills": "auto",
-    "bash": false,
-    "bashForegroundMs": 2000,
-    "config": false,
-    "mcp": false,
-    "plugins": false,
-    "debug": true,
     "restart": true,
     "ownerDisplay": "raw",
     "ownerAllowFrom": [
@@ -85,36 +79,32 @@
       }
     }
   },
-    "gateway": {
-      "port": 18789,
-      "mode": "local",
-      "bind": "lan",
-
-      "controlUi": {
-        "enabled": true,
-        "allowedOrigins": [
-          "https://openclaw.tiger-bushmaster.ts.net"
-        ],
-        "allowInsecureAuth": false
-      },
-
-      "auth": {
-        "mode": "token",
-        "token": "${OPENCLAW_GATEWAY_TOKEN}",
-        "allowTailscale": true,
-
-        "rateLimit": {
-          "maxAttempts": 10,
-          "windowMs": 60000,
-          "lockoutMs": 300000
-        }
-      },
-
-      "reload": {
-        "mode": "hybrid",
-        "debounceMs": 300
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "lan",
+    "controlUi": {
+      "enabled": true,
+      "allowedOrigins": [
+        "https://openclaw.tiger-bushmaster.ts.net"
+      ],
+      "allowInsecureAuth": false
+    },
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}",
+      "allowTailscale": true,
+      "rateLimit": {
+        "maxAttempts": 10,
+        "windowMs": 60000,
+        "lockoutMs": 300000
       }
     },
+    "reload": {
+      "mode": "hybrid",
+      "debounceMs": 300
+    }
+  },
   "plugins": {
     "entries": {
       "telegram": {
@@ -166,6 +156,9 @@
         "enabled": true
       },
       "acpx": {
+        "enabled": true
+      },
+      "workboard": {
         "enabled": true
       }
     },
@@ -306,12 +299,10 @@
     }
   },
   "tools": {
-      "profile": "coding",
-
-      "codeMode": {
-        "enabled": true
-      },
-
+    "profile": "coding",
+    "codeMode": {
+      "enabled": true
+    },
     "web": {
       "search": {
         "provider": "searxng",
@@ -333,14 +324,11 @@
         ]
       },
       "docmost": {
-        "command": "npx",
-        "args": [
-          "-y",
-          "mcp-remote",
-          "https://docmost.tiger-bushmaster.ts.net/mcp",
-          "--header",
-          "Authorization: Bearer ${DOCMOST_API_KEY}"
-        ]
+        "url": "https://docmost.tiger-bushmaster.ts.net/mcp",
+        "transport": "streamable-http",
+        "headers": {
+          "Authorization": "Bearer ${DOCMOST_API_KEY}"
+        }
       },
       "coolify-readonly": {
         "url": "https://ubuntu-server.tiger-bushmaster.ts.net/mcp",

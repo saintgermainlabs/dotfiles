@@ -1,0 +1,32 @@
+# ~/.dotfiles/config/modules.toml
+
+[modules.docker]
+enabled = true
+runtime = "host"
+
+[modules.hashicorp-vault]
+enabled = true
+runtime = "host"
+manage_install = true
+
+[modules.openclaw]
+enabled = true
+runtime = "host"
+
+[modules.local_to_remote]
+enabled = true
+runtime = "host"
+roles = ["local"]
+
+[modules.coolify-manager]
+enabled = true
+runtime = "host"
+
+[modules.tailscale-manager]
+enabled = false
+runtime = "docker"
+manage_install = true
+
+[modules.kubernetes]
+enabled = false
+runtime = "docker"
