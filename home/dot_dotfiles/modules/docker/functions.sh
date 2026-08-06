@@ -1,12 +1,28 @@
 # Docker helpers — sourced when the docker module is enabled.
 
 # List running containers with name, status, and ports.
+## @category Docker
+## @description List running containers with name, status, and ports in a table format
+## @usage cps
+## @requires docker
+## @see docker-ps(1)
 cps() {
   docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 }
 
 # Open a shell (or run a command) inside a container.
 # Usage: dsh <container> [command]
+## @category Docker
+## @description Open a shell or run a command inside a Docker container
+## @usage dsh <container> [command]
+## @arg $1 string The container name or ID to execute commands in
+## @arg $@ string Optional command to run in the container (defaults to bash or sh)
+## @exitcode 0 If the command executes successfully
+## @exitcode 2 If incorrect number of arguments provided
+## @requires docker
+## @example dsh my-container
+## @example dsh my-container ls -la
+## @see docker-exec(1)
 dsh() {
   if [ "$#" -lt 1 ]; then
     printf 'Usage: dsh <container> [command]\n' >&2
@@ -25,6 +41,17 @@ dsh() {
 
 # Run an interactive container and remove it on exit.
 # Usage: drun <image> [command]
+## @category Docker
+## @description Run an interactive Docker container and remove it when it exits
+## @usage drun <image> [command]
+## @arg $1 string The Docker image to run
+## @arg $@ string Optional command to run in the container
+## @exitcode 0 If the container runs successfully
+## @exitcode 2 If incorrect number of arguments provided
+## @requires docker
+## @example drun ubuntu:latest
+## @example drun alpine:latest sh
+## @see docker-run(1)
 drun() {
   if [ "$#" -lt 1 ]; then
     printf 'Usage: drun <image> [command]\n' >&2
@@ -34,6 +61,13 @@ drun() {
 }
 
 # Show docker disk usage, then optionally prune.
+## @category Docker
+## @description Show Docker disk usage statistics and optionally prune unused data
+## @usage dprune
+## @stdin Prompts for confirmation before pruning
+## @requires docker
+## @example dprune
+## @see docker-system(1)
 dprune() {
   docker system df
   printf 'Run Docker system prune? [y/N] '
