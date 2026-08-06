@@ -26,14 +26,33 @@
 # Internal helpers
 # -----------------------------------------------------------------------------
 
+## @internal
+## @category Local-to-Remote
+## @description Print an error message to stderr
+## @usage _ltr_error <message>
+## @arg $1 string Error message to display
+## @stderr Error message with prefix
 _ltr_error() {
     printf 'local_to_remote: %s\n' "$*" >&2
 }
 
+## @internal
+## @category Local-to-Remote
+## @description Get the configuration file path
+## @usage _ltr_config_path
+## @stdout Configuration file path
 _ltr_config_path() {
     printf '%s\n' "${LOCAL_TO_REMOTE_CONFIG:-$HOME/.config/local_to_remote/config.sh}"
 }
 
+## @internal
+## @category Local-to-Remote
+## @description Load configuration from file
+## @usage _ltr_load_config
+## @env LOCAL_TO_REMOTE_CONFIG Path to configuration file (optional)
+## @exitcode 0 If configuration is loaded successfully
+## @exitcode 1 If configuration file is not found or invalid
+## @stderr Error messages for missing or invalid configuration
 _ltr_load_config() {
     local config
     config="$(_ltr_config_path)"
@@ -55,6 +74,14 @@ _ltr_load_config() {
     fi
 }
 
+## @internal
+## @category Local-to-Remote
+## @description Check if required commands are available
+## @usage _ltr_require <command>...
+## @arg $@ string Command names to check
+## @exitcode 0 If all commands are available
+## @exitcode 1 If any command is not found
+## @stderr Error message for missing commands
 _ltr_require() {
     local command_name
 
@@ -66,11 +93,28 @@ _ltr_require() {
     done
 }
 
+## @internal
+## @category Local-to-Remote
+## @description Get the configured remote target host
+## @usage _ltr_remote_target
+## @requires ssh
+## @stdout Remote host address
+## @exitcode 0 If remote target is retrieved successfully
+## @exitcode 1 If configuration loading fails
 _ltr_remote_target() {
     _ltr_load_config || return
     printf '%s\n' "$LTR_REMOTE_HOST"
 }
 
+## @internal
+## @category Local-to-Remote
+## @description Get allowed remote path for a file key
+## @usage _ltr_allowed_remote_path <key>
+## @arg $1 string File key to look up
+## @stdout Remote path for the file key
+## @exitcode 0 If key is found
+## @exitcode 1 If key is not in allowed files list
+## @stderr Error message for disallowed files
 _ltr_allowed_remote_path() {
     local key="$1"
 
@@ -84,6 +128,15 @@ _ltr_allowed_remote_path() {
     printf '%s\n' "${LTR_ALLOWED_FILES[$key]}"
 }
 
+## @internal
+## @category Local-to-Remote
+## @description Create a temporary file for editing
+## @usage _ltr_make_temp_file <key> <remote_path>
+## @arg $1 string File key
+## @arg $2 string Remote path
+## @stdout Path to temporary file
+## @exitcode 0 If temporary file is created successfully
+## @exitcode 1 If temporary file creation fails
 _ltr_make_temp_file() {
     local key="$1"
     local remote_path="$2"
@@ -99,6 +152,15 @@ _ltr_make_temp_file() {
     mktemp "${TMPDIR:-/tmp}/ltr-${key//[^a-zA-Z0-9_-]/_}.XXXXXX${suffix}"
 }
 
+## @internal
+## @category Local-to-Remote
+## @description Run the configured editor on a file
+## @usage _ltr_run_editor <file>
+## @arg $1 string File path to edit
+## @env LTR_EDITOR Editor command to use (defaults to "subl -w")
+## @exitcode 0 If editor runs successfully
+## @exitcode 1 If editor command is not found or fails
+## @stderr Error messages for editor issues
 _ltr_run_editor() {
     local file="$1"
     local -a editor_cmd
@@ -128,21 +190,18 @@ _ltr_run_editor() {
 # Public functions
 # -----------------------------------------------------------------------------
 
-# @name        remote_cmd
-# @category    local_to_remote
-# @summary     Execute a command on the configured remote machine.
-# @usage       remote_cmd <command> [arguments...]
-# @arg         command      Command to execute remotely.
-# @arg         arguments    Arguments passed to the remote command.
-# @returns     Remote command stdout, stderr, and exit status.
-# @requires    ssh
-# @example     remote_cmd hostname
-# @example     remote_cmd docker ps
-# @example     remote_cmd ls -lah /srv
-# @description
-#   Executes the supplied command on LTR_REMOTE_HOST over SSH.
-#   Arguments are shell-escaped locally before being sent to the remote Bash
-#   shell, so normal arguments containing spaces are preserved.
+## @category Local-to-Remote
+## @description Execute a command on the configured remote machine
+## @usage remote_cmd <command> [arguments...]
+## @arg $1 string Command to execute remotely
+## @arg $@ string Optional arguments passed to the remote command
+## @requires ssh
+## @stdout Remote command stdout
+## @stderr Remote command stderr
+## @exitcode * Remote command exit status
+## @example remote_cmd hostname
+## @example remote_cmd docker ps
+## @example remote_cmd ls -lah /srv
 remote_cmd() {
     _ltr_load_config || return
     _ltr_require ssh || return
@@ -163,13 +222,11 @@ remote_cmd() {
     ssh "$LTR_REMOTE_HOST" "bash -lc $(printf '%q' "$remote_command")"
 }
 
-# @name        remote_shell
-# @category    local_to_remote
-# @summary     Open an interactive shell on the configured remote machine.
-# @usage       remote_shell
-# @returns     Interactive SSH session.
-# @requires    ssh
-# @example     remote_shell
+## @category Local-to-Remote
+## @description Open an interactive shell on the configured remote machine
+## @usage remote_shell
+## @requires ssh
+## @example remote_shell
 remote_shell() {
     _ltr_load_config || return
     _ltr_require ssh || return
@@ -177,18 +234,18 @@ remote_shell() {
     ssh -t "$LTR_REMOTE_HOST"
 }
 
-# @name        remote_upload
-# @category    local_to_remote
-# @summary     Upload a local file or directory to the remote machine with rsync.
-# @usage       remote_upload <local-path> <remote-path>
-# @arg         local-path   Local file or directory.
-# @arg         remote-path  Destination path on the remote machine.
-# @returns     rsync output and exit status.
-# @requires    rsync ssh
-# @example     remote_upload ./compose.yaml /srv/apps/openclaw/compose.yaml
-# @example     remote_upload ./scripts/ /srv/scripts/
-# @description
-#   Uses rsync over SSH. Directory trailing-slash semantics are preserved.
+## @category Local-to-Remote
+## @description Upload a local file or directory to the remote machine with rsync
+## @usage remote_upload <local-path> <remote-path>
+## @arg $1 string Local file or directory path
+## @arg $2 string Destination path on the remote machine
+## @requires rsync
+## @requires ssh
+## @stdout rsync output
+## @stderr rsync errors
+## @exitcode * rsync exit status
+## @example remote_upload ./compose.yaml /srv/apps/openclaw/compose.yaml
+## @example remote_upload ./scripts/ /srv/scripts/
 remote_upload() {
     _ltr_load_config || return
     _ltr_require rsync ssh || return
@@ -211,16 +268,18 @@ remote_upload() {
         -- "$local_path" "${LTR_REMOTE_HOST}:${remote_path}"
 }
 
-# @name        remote_download
-# @category    local_to_remote
-# @summary     Download a remote file or directory with rsync.
-# @usage       remote_download <remote-path> <local-path>
-# @arg         remote-path  File or directory on the remote machine.
-# @arg         local-path   Local destination path.
-# @returns     rsync output and exit status.
-# @requires    rsync ssh
-# @example     remote_download /srv/apps/openclaw/compose.yaml ./compose.yaml
-# @example     remote_download /srv/scripts/ ./scripts/
+## @category Local-to-Remote
+## @description Download a remote file or directory with rsync
+## @usage remote_download <remote-path> <local-path>
+## @arg $1 string File or directory path on the remote machine
+## @arg $2 string Local destination path
+## @requires rsync
+## @requires ssh
+## @stdout rsync output
+## @stderr rsync errors
+## @exitcode * rsync exit status
+## @example remote_download /srv/apps/openclaw/compose.yaml ./compose.yaml
+## @example remote_download /srv/scripts/ ./scripts/
 remote_download() {
     _ltr_load_config || return
     _ltr_require rsync ssh || return
@@ -238,14 +297,11 @@ remote_download() {
         -- "${LTR_REMOTE_HOST}:${remote_path}" "$local_path"
 }
 
-# @name        remote_files
-# @category    local_to_remote
-# @summary     List configuration files approved for remote editing.
-# @usage       remote_files
-# @returns     Approved file keys and their remote paths.
-# @example     remote_files
-# @description
-#   Displays only files explicitly configured in LTR_ALLOWED_FILES.
+## @category Local-to-Remote
+## @description List configuration files approved for remote editing
+## @usage remote_files
+## @stdout Approved file keys and their remote paths
+## @example remote_files
 remote_files() {
     _ltr_load_config || return
 
@@ -260,27 +316,19 @@ remote_files() {
     done < <(printf '%s\n' "${!LTR_ALLOWED_FILES[@]}" | sort)
 }
 
-# @name        remote_edit
-# @category    local_to_remote
-# @summary     Safely edit an approved remote configuration file locally.
-# @usage       remote_edit <file-key>
-# @arg         file-key     Approved key shown by remote_files.
-# @returns     Downloads, edits, validates change state, and reuploads the file.
-# @requires    rsync ssh
-# @example     remote_edit openclaw-config
-# @example     remote_edit tailscale-serve
-# @description
-#   Only paths listed in LTR_ALLOWED_FILES may be edited.
-#
-#   Workflow:
-#     1. Verify the remote file exists.
-#     2. Download it to a temporary local file.
-#     3. Open it with LTR_EDITOR.
-#     4. If unchanged, do nothing.
-#     5. If changed, create a timestamped remote backup.
-#     6. Upload the edited copy back to the same path.
-#
-#   The temporary local file is removed when the function exits.
+## @category Local-to-Remote
+## @description Safely edit an approved remote configuration file locally
+## @usage remote_edit <file-key>
+## @arg $1 string Approved key shown by remote_files
+## @requires rsync
+## @requires ssh
+## @requires sha256sum
+## @stdout Status messages about the edit process
+## @stderr Error messages for failures
+## @exitcode 0 If file is successfully edited or unchanged
+## @exitcode 1 If editing fails
+## @example remote_edit openclaw-config
+## @example remote_edit tailscale-serve
 remote_edit() {
     _ltr_load_config || return
     _ltr_require rsync ssh sha256sum || return
@@ -334,14 +382,16 @@ remote_edit() {
     printf 'Updated remote file:\n  %s\n' "$remote_path"
 }
 
-# @name        remote_show
-# @category    local_to_remote
-# @summary     Print an approved remote configuration file without editing it.
-# @usage       remote_show <file-key>
-# @arg         file-key     Approved key shown by remote_files.
-# @returns     Remote file contents.
-# @requires    ssh
-# @example     remote_show openclaw-config
+## @category Local-to-Remote
+## @description Print an approved remote configuration file without editing it
+## @usage remote_show <file-key>
+## @arg $1 string Approved key shown by remote_files
+## @requires ssh
+## @stdout Remote file contents
+## @stderr Error messages for failures
+## @exitcode 0 If file is successfully retrieved
+## @exitcode 1 If retrieval fails
+## @example remote_show openclaw-config
 remote_show() {
     _ltr_load_config || return
     _ltr_require ssh || return
@@ -357,14 +407,16 @@ remote_show() {
     ssh "$LTR_REMOTE_HOST" cat -- "$remote_path"
 }
 
-# @name        remote_backup_file
-# @category    local_to_remote
-# @summary     Create a timestamped backup of an approved remote config file.
-# @usage       remote_backup_file <file-key>
-# @arg         file-key     Approved key shown by remote_files.
-# @returns     Path of the created remote backup.
-# @requires    ssh
-# @example     remote_backup_file openclaw-config
+## @category Local-to-Remote
+## @description Create a timestamped backup of an approved remote config file
+## @usage remote_backup_file <file-key>
+## @arg $1 string Approved key shown by remote_files
+## @requires ssh
+## @stdout Path of the created remote backup
+## @stderr Error messages for failures
+## @exitcode 0 If backup is successfully created
+## @exitcode 1 If backup creation fails
+## @example remote_backup_file openclaw-config
 remote_backup_file() {
     _ltr_load_config || return
     _ltr_require ssh || return
@@ -389,21 +441,16 @@ remote_backup_file() {
     printf '%s\n' "$backup_path"
 }
 
-# @name        rfunc
-# @category    local_to_remote
-# @summary     Execute a locally defined Bash function on the remote machine.
-# @usage       rfunc <function> [arguments...]
-# @arg         function     Name of a local Bash function.
-# @arg         arguments    Arguments passed to the function remotely.
-# @returns     Remote function output and exit status.
-# @requires    ssh bash
-# @example     rfunc container_id openclaw application
-# @description
-#   Sends the definition of one local Bash function over SSH and executes it
-#   on the configured remote machine.
-#
-#   This works best for self-contained functions. Dependencies on additional
-#   local functions are not automatically transferred.
+## @category Local-to-Remote
+## @description Execute a locally defined Bash function on the remote machine
+## @usage rfunc <function> [arguments...]
+## @arg $1 string Name of a local Bash function
+## @arg $@ string Optional arguments passed to the function remotely
+## @requires ssh
+## @stdout Remote function output
+## @stderr Error messages for failures
+## @exitcode * Remote function exit status
+## @example rfunc container_id openclaw application
 rfunc() {
     _ltr_load_config || return
     _ltr_require ssh || return
@@ -434,11 +481,16 @@ rfunc() {
     } | ssh "$LTR_REMOTE_HOST" 'bash -s'
 }
 
-# @name        r
-# @category    local_to_remote
-# @summary     Shorthand for rfunc.
-# @usage       r <function> [arguments...]
-# @example     r container_id openclaw application
+## @category Local-to-Remote
+## @description Shorthand for rfunc
+## @usage r <function> [arguments...]
+## @arg $1 string Name of a local Bash function
+## @arg $@ string Optional arguments passed to the function remotely
+## @requires ssh
+## @stdout Remote function output
+## @stderr Error messages for failures
+## @exitcode * Remote function exit status
+## @example r container_id openclaw application
 r() {
     rfunc "$@"
 }
