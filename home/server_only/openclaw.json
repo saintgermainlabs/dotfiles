@@ -39,7 +39,7 @@
       },
       "workspace": "/workspace",
         "sandbox": {
-          "mode": "all",
+          "mode": "off",
           "scope": "agent",
           "workspaceAccess": "rw",
           "docker": {
@@ -62,6 +62,12 @@
   "commands": {
     "native": "auto",
     "nativeSkills": "auto",
+    "bash": false,
+    "bashForegroundMs": 2000,
+    "config": false,
+    "mcp": false,
+    "plugins": false,
+    "debug": true,
     "restart": true,
     "ownerDisplay": "raw",
     "ownerAllowFrom": [
@@ -324,6 +330,16 @@
         "args": [
           "-y",
           "@upstash/context7-mcp"
+        ]
+      },
+      "docmost": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "mcp-remote",
+          "https://docmost.tiger-bushmaster.ts.net/mcp",
+          "--header",
+          "Authorization: Bearer ${DOCMOST_API_KEY}"
         ]
       },
       "coolify-readonly": {
