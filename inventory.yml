@@ -1,0 +1,78 @@
+---
+# Server Inventory
+# Generated inventory template for Coolify services
+
+services:
+  # Web Applications
+  web_apps:
+    - name: "example-web-app"
+      type: "laravel"
+      domain: "example.com"
+      port: 80
+      status: "running"
+      version: "1.0.0"
+      description: "Main web application"
+      
+  # Databases
+  databases:
+    - name: "main-database"
+      type: "mysql"
+      version: "8.0"
+      port: 3306
+      status: "running"
+      description: "Primary database"
+      
+    - name: "cache-db"
+      type: "redis"
+      version: "7.0"
+      port: 6379
+      status: "running"
+      description: "Caching database"
+      
+  # APIs
+  apis:
+    - name: "api-service"
+      type: "nodejs"
+      domain: "api.example.com"
+      port: 3000
+      status: "running"
+      version: "2.1.0"
+      description: "REST API service"
+      
+  # Background Services
+  background_services:
+    - name: "queue-worker"
+      type: "laravel-worker"
+      status: "running"
+      description: "Background job processor"
+      
+    - name: "scheduler"
+      type: "cron"
+      status: "running"
+      description: "Task scheduler"
+      
+# Server Information
+server:
+  hostname: "coolify-server"
+  ip_address: "192.168.1.100"
+  os: "Ubuntu 22.04 LTS"
+  coolify_version: "4.x"
+  
+# Applications
+applications:
+  - name: "frontend-app"
+    type: "static"
+    domain: "app.example.com"
+    status: "deployed"
+    version: "1.2.3"
+    
+  - name: "admin-panel"
+    type: "php"
+    domain: "admin.example.com"
+    status: "deployed"
+    version: "3.0.1"
+
+# Notes
+# Run 'coolify services list' to get actual services
+# Run 'coolify apps list' to get actual applications
+# Update this file with real data from your server
