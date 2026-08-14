@@ -1,0 +1,22 @@
+# Extra directories appended to PATH (lowest priority) at the end of the rc
+# files. Rendered by ~/.chezmoitemplates/paths.tmpl into .bashrc/.zshrc.
+#
+# Sections:
+#   common — appended on every host
+#   local  — additionally appended when role = "local"
+#   remote — additionally appended when role = "remote"
+#
+# Edit, then run `chezmoi apply`.
+
+[paths]
+# Appended on every host.
+common = []
+
+# Appended only when role = "local".
+local = [
+  "/opt/Antigravity-x64/",
+  "$HOME/.opencode/bin"
+]
+
+# Appended only when role = "remote".
+remote = []

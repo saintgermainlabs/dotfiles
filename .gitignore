@@ -5,3 +5,13 @@
 .env.*
 mise.local.toml
 .aider*
+
+# Scratch / editor dumps
+/New Document.md
+**/* (Copy).*
+**/.cursor/hooks/state/
+
+# Live secret dumps — never commit
+home/server_only/mcp-servers-export.json
+home/server_only/inventory..yml
+home/server_only/hermes.yaml

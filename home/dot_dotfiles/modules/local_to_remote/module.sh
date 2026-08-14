@@ -27,4 +27,14 @@ _ltr_module_dir="$(
 # shellcheck source=local_to_remote.sh
 . "$_ltr_module_dir/local_to_remote.sh"
 
+# Interactive-only tab completions.
+case $- in
+  *i*)
+    # shellcheck source=completions.bash
+    [ -r "$_ltr_module_dir/completions.bash" ] && . "$_ltr_module_dir/completions.bash"
+    # shellcheck source=completions.zsh
+    [ -r "$_ltr_module_dir/completions.zsh" ] && . "$_ltr_module_dir/completions.zsh"
+    ;;
+esac
+
 unset _ltr_module_file _ltr_module_dir

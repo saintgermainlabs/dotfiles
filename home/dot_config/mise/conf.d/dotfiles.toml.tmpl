@@ -19,4 +19,9 @@ starship = "latest"
 vault = "latest"
 jq = "latest"
 {{- end }}
+[env]
+{{- if eq .role "local" }}
+HERMES_DESKTOP_REMOTE_URL = "https://hermes.tiger-bushmaster.ts.net"
+{{- end }}
 {{- end -}}
+

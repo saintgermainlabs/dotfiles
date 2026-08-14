@@ -32,4 +32,14 @@ fi
 # shellcheck source=functions.sh
 . "${_docker_module_dir}/functions.sh"
 
+# Interactive-only tab completions.
+case $- in
+  *i*)
+    # shellcheck source=completions.bash
+    [ -r "${_docker_module_dir}/completions.bash" ] && . "${_docker_module_dir}/completions.bash"
+    # shellcheck source=completions.zsh
+    [ -r "${_docker_module_dir}/completions.zsh" ] && . "${_docker_module_dir}/completions.zsh"
+    ;;
+esac
+
 unset _docker_module_file _docker_module_dir

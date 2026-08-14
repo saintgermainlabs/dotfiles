@@ -37,6 +37,10 @@ case $- in
   *i*)
     # shellcheck source=aliases.sh
     . "$_oc_module_dir/aliases.sh"
+    # shellcheck source=completions.bash
+    [ -r "$_oc_module_dir/completions.bash" ] && . "$_oc_module_dir/completions.bash"
+    # shellcheck source=completions.zsh
+    [ -r "$_oc_module_dir/completions.zsh" ] && . "$_oc_module_dir/completions.zsh"
     ;;
 esac
 

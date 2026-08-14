@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "MetaMCP": {
+      "url": "https://metamcp.tiger-bushmaster.ts.net/metamcp/openclaw/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:METAMCP_API_KEY}"
+      }
+    },
+    "lovable": {
+      "serverUrl": "https://mcp.lovable.dev"
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "mem0": {
+      "command": "mem0-mcp-server",
+      "env": {
+        "MEM0_API_KEY": "${env:MEM0_API_KEY}"
+      }
+    }
+  }
+}

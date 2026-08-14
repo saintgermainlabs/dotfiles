@@ -125,6 +125,7 @@ extract() {
   esac
 }
 
+
 ## @description Activates a Python virtual environment found in the current directory.
 ## @description Searches for .venv, venv, .env, and env directories containing bin/activate.
 ## @category Python Helpers
@@ -157,6 +158,22 @@ venv() {
     return 1
   fi
 }
+
+# Find helpers
+
+## @description Finds all files with common video extensions.
+## @category Find
+## @arg $1 string The path to the directory to search from. A trailing slash is removed when constructing the archive name.
+## @example
+##   find_video_extensions ~
+##   # Finds videos in your home directory
+## @see find(1)
+find_video_extensions() {
+    local target_dir="${1:-.}"
+    find "$target_dir" -type f \( -iname "*.mp4" -o -iname "*.mkv" -o -iname "*.avi" -o -iname "*.mov" -o -iname "*.flv" -o -iname "*.wmv" -o -iname "*.webm" \)
+}
+
+
 
 
 # SSH Related Functions

@@ -48,3 +48,49 @@ r_send() {
     local remote_path="$3"
     scp "$local_path" "$remote_host:$remote_path"
 }
+
+
+
+##  Git helpers
+
+knowledge-git() {
+    git \
+        --git-dir="$HOME/.git-repos/knowledge.git" \
+        --work-tree="/srv/knowledge" \
+        "$@"
+}
+
+
+obsidian-git() {
+    git \
+        --git-dir="$HOME/.git-repos/obsidian.git" \
+        --work-tree="/srv/obsidian" \
+        "$@"
+}
+
+
+
+
+find_openclaw_dir() {
+    local services_dir="/data/coolify/services"
+    
+    # Check if the directory exists
+    if [ ! -d "$services_dir" ]; then
+        echo "Error: Directory $services_dir does not exist."
+        return 1
+    fi
+
+    echo "Searching for OpenClaw volumes in $services_dir..."
+    echo "------------------------------------------------"
+
+    # Find all docker-compose files and search them
+    find "$services_dir" -type f \( -name "docker-compose.yml" -o -name "docker-compose.yaml" \) | while read -r compose_file; do
+        if grep -qi "openclaw" "$compose_file"; then
+            echo "📍 Found in: $compose_file"
+            echo "--- Volume Definitions ---"
+            # Prints the lines containing 'openclaw' and 2 lines after to see the path mapping
+            grep -A 2 -i "openclaw" "$compose_file"
+            echo "------------------------------------------------"
+        fi
+    done
+}

@@ -586,35 +586,109 @@ oc_config_put() {
 }
 
 
-# Download OpenClaw config, edit it locally in Sublime Text, validate it,
-# then optionally upload it back into the remote container.
+# Download OpenClaw config, edit it locally, validate it, then optionally
+# upload it back into the remote container.
 #
 # Usage:
 #   oc_config_edit
+#   oc_config_edit --editor nano
+#   oc_config_edit --editor vscode
+#
+# Editors: sublime (default), nano, vscode.
 #
 # Optional editor override:
-#   OPENCLAW_CONFIG_EDITOR="subl -w" oc_config_edit
+#   OPENCLAW_CONFIG_EDITOR="code -w" oc_config_edit
 #
 # The local working copy is retained at:
 #   ~/.cache/openclaw/openclaw.json
 oc_config_edit() {
-  local _oc_file _oc_editor _oc_answer
+  local _oc_file _oc_editor _oc_editor_name _oc_answer _oc_bin _oc_have_tty
 
   _oc_file="${XDG_CACHE_HOME:-$HOME/.cache}/openclaw/openclaw.json"
-  _oc_editor="${OPENCLAW_CONFIG_EDITOR:-subl -w}"
+  _oc_editor_name=""
 
-  oc_config_get "$_oc_file" || return
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --editor)
+        if [ "$#" -lt 2 ]; then
+          _oc_error "missing value for --editor"
+          _oc_error "usage: oc_config_edit [--editor sublime|nano|vscode]"
+          return 2
+        fi
+        _oc_editor_name="$2"
+        shift 2
+        ;;
+      --editor=*)
+        _oc_editor_name="${1#--editor=}"
+        shift
+        ;;
+      *)
+        _oc_error "unknown argument: $1"
+        _oc_error "usage: oc_config_edit [--editor sublime|nano|vscode]"
+        return 2
+        ;;
+    esac
+  done
 
-  printf '\nOpening OpenClaw config in Sublime Text...\n'
+  # Resolve editor: --editor flag > OPENCLAW_CONFIG_EDITOR > default.
+  if [ -n "$_oc_editor_name" ]; then
+    case "$_oc_editor_name" in
+      sublime)  _oc_editor="subl -w" ;;
+      nano)     _oc_editor="nano" ;;
+      vscode)   _oc_editor="code -w" ;;
+      *)
+        _oc_error "unknown editor: $_oc_editor_name"
+        _oc_error "choose one of: sublime, nano, vscode"
+        return 2
+        ;;
+    esac
+  else
+    _oc_editor="${OPENCLAW_CONFIG_EDITOR:-subl -w}"
+  fi
+
+  _oc_bin="${_oc_editor%% *}"
+  if ! command -v "$_oc_bin" >/dev/null 2>&1; then
+    _oc_error "editor not found: $_oc_bin"
+    _oc_error "try: oc_config_edit --editor nano"
+    unset _oc_file _oc_editor _oc_editor_name _oc_answer _oc_bin _oc_have_tty
+    return 127
+  fi
+
+  oc_config_get "$_oc_file" || {
+    unset _oc_file _oc_editor _oc_editor_name _oc_answer _oc_bin _oc_have_tty
+    return
+  }
+
+  printf '\nOpening OpenClaw config in %s...\n' "$_oc_bin"
   printf 'Local file: %s\n\n' "$_oc_file"
 
-  # shellcheck disable=SC2086
-  $_oc_editor "$_oc_file"
+  # Check whether the editor can get a terminal: stdin when it's a TTY, else
+  # the controlling terminal (so TUI editors like nano work under piped or
+  # agent shells where stdin isn't a TTY).
+  _oc_have_tty=false
+  if [ -t 0 ]; then
+    _oc_have_tty=true
+  elif exec 3< /dev/tty 2>/dev/null; then
+    exec 3<&-
+    _oc_have_tty=true
+  fi
+
+  if [ -t 0 ]; then
+    # shellcheck disable=SC2086
+    $_oc_editor "$_oc_file"
+  elif [ "$_oc_have_tty" = true ]; then
+    # shellcheck disable=SC2086
+    $_oc_editor "$_oc_file" < /dev/tty
+  else
+    # No controlling terminal — best effort (GUI editors may still work).
+    # shellcheck disable=SC2086
+    $_oc_editor "$_oc_file"
+  fi
   _oc_status=$?
 
   if [ "$_oc_status" -ne 0 ]; then
     _oc_error "editor exited with status $_oc_status"
-    unset _oc_file _oc_editor _oc_answer
+    unset _oc_file _oc_editor _oc_editor_name _oc_answer _oc_bin _oc_have_tty
     return "$_oc_status"
   fi
 
@@ -623,22 +697,25 @@ oc_config_edit() {
     if ! python3 -m json.tool "$_oc_file" >/dev/null 2>&1; then
       _oc_error "edited file is not valid JSON"
       _oc_error "local copy retained at: $_oc_file"
-      unset _oc_file _oc_editor _oc_answer
+      unset _oc_file _oc_editor _oc_editor_name _oc_answer _oc_bin _oc_have_tty
       return 1
     fi
   fi
 
   printf '\nJSON validation: OK\n'
 
-  if [ ! -t 0 ]; then
+  if [ -t 0 ]; then
+    printf 'Upload edited config to OpenClaw? [y/N] '
+    read -r _oc_answer
+  elif [ "$_oc_have_tty" = true ]; then
+    printf 'Upload edited config to OpenClaw? [y/N] ' >&2
+    read -r _oc_answer < /dev/tty
+  else
     _oc_error "not uploading automatically in a non-interactive shell"
     _oc_error "run: oc_config_put $(_oc_quote "$_oc_file")"
-    unset _oc_file _oc_editor _oc_answer
+    unset _oc_file _oc_editor _oc_editor_name _oc_answer _oc_bin _oc_have_tty
     return 0
   fi
-
-  printf 'Upload edited config to OpenClaw? [y/N] '
-  read -r _oc_answer
 
   case "$_oc_answer" in
     y|Y|yes|YES)
@@ -652,7 +729,7 @@ oc_config_edit() {
       ;;
   esac
 
-  unset _oc_file _oc_editor _oc_answer
+  unset _oc_file _oc_editor _oc_editor_name _oc_answer _oc_bin _oc_have_tty
   return "$_oc_status"
 }
 

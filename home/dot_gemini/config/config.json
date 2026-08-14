@@ -1,0 +1,34 @@
+{
+  "plugins": {
+    "android-cli-plugin": {
+      "enabled": true
+    },
+    "chrome-devtools-plugin": {
+      "enabled": true
+    },
+    "data-agent-kit-plugin": {
+      "enabled": true
+    },
+    "firebase": {
+      "enabled": true
+    },
+    "flutter": {
+      "enabled": true
+    },
+    "google-antigravity-sdk": {
+      "enabled": true
+    },
+    "google_maps_platform": {
+      "enabled": true
+    },
+    "modern-web-guidance-plugin": {
+      "enabled": true
+    },
+    "science": {
+      "enabled": true
+    }
+  },
+  "userSettings": {
+    "remoteControlHostname": "god-latitude-7390-2-in-1-blazing-quasar"
+  }
+}

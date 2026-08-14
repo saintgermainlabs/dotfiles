@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["@zenobius/opencode-skillful"],
+  "mcp": {
+    "metamcp": {
+      "type": "remote",
+      "url": "https://metamcp.tiger-bushmaster.ts.net/metamcp/openclaw/mcp",
+      "enabled": true,
+      "headers": {
+        "Authorization": "Bearer {env:METAMCP_API_KEY}"
+      }
+    }
+  }
+}
+
+

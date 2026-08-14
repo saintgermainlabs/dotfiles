@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Read the clipboard; if it holds a URL, stash it via stash_source_url."""
+
+from __future__ import annotations
+
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from urllib.parse import urlparse
+
+
+STASH_SCRIPT = Path(__file__).resolve().parent / "stash_source_url"
+URL_IN_TEXT_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
+
+
+def get_clipboard() -> str:
+    if shutil.which("wl-paste"):
+        result = subprocess.run(
+            ["wl-paste", "--no-newline"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            # wl-paste exits 1 when the clipboard is empty or unavailable
+            return ""
+        return result.stdout.strip()
+
+    if shutil.which("xclip"):
+        result = subprocess.run(
+            ["xclip", "-selection", "clipboard", "-o"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            return ""
+        return result.stdout.strip()
+
+    raise RuntimeError("Neither wl-paste nor xclip is installed.")
+
+
+def is_url(value: str) -> bool:
+    try:
+        parsed = urlparse(value)
+    except ValueError:
+        return False
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def extract_url(content: str) -> str | None:
+    """Return a URL from clipboard text, or None if none found."""
+    candidate = content.strip().strip("<>\"'")
+    if is_url(candidate):
+        return candidate
+
+    # Single-line clipboard that is only a URL with trailing junk punctuation
+    first_line = candidate.splitlines()[0].strip().rstrip(".,;:!?)") if candidate else ""
+    if is_url(first_line):
+        return first_line
+
+    match = URL_IN_TEXT_RE.search(content)
+    if match:
+        found = match.group(0).rstrip(".,;:!?)")
+        if is_url(found):
+            return found
+
+    return None
+
+
+def main() -> int:
+    try:
+        content = get_clipboard()
+    except (OSError, subprocess.CalledProcessError, RuntimeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    if not content:
+        print("error: clipboard is empty", file=sys.stderr)
+        return 1
+
+    url = extract_url(content)
+    if url is None:
+        print("error: clipboard does not contain a URL", file=sys.stderr)
+        return 1
+
+    stash = STASH_SCRIPT if STASH_SCRIPT.is_file() else shutil.which("stash_source_url")
+    if not stash:
+        print("error: stash_source_url not found", file=sys.stderr)
+        return 1
+
+    result = subprocess.run([str(stash), url], check=False)
+    return result.returncode
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

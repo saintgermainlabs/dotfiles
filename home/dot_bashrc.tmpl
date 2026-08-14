@@ -28,6 +28,7 @@ fi
 # Late init last among managed files: mise, zoxide, fzf, starship
 {{- if .modules.common }}
 [ -r "${DF_DIR}/common/init" ] && . "${DF_DIR}/common/init"
+{{- template "paths.tmpl" . }}
 {{- end }}
 
 # Machine-local, untracked overrides.

@@ -1,0 +1,122 @@
+#!/bin/bash
+
+# Script to organize Downloads folder by file type
+# Creates folders for Images, Videos, Documents, and Archives
+# Moves all matching files from Downloads and subdirectories
+
+# Get the Downloads folder path (works for macOS and Linux)
+DOWNLOADS_DIR="$HOME/Downloads"
+
+# Define destination folders
+IMAGES_DIR="$DOWNLOADS_DIR/Downloaded_Images"
+VIDEOS_DIR="$DOWNLOADS_DIR/Downloaded_Videos"
+DOCUMENTS_DIR="$DOWNLOADS_DIR/Downloaded_Documents"
+ARCHIVES_DIR="$DOWNLOADS_DIR/Downloaded_Archives"
+
+# Check if Downloads folder exists
+if [ ! -d "$DOWNLOADS_DIR" ]; then
+    echo "Error: Downloads folder not found at $DOWNLOADS_DIR"
+    exit 1
+fi
+
+# Create destination folders if they don't exist
+mkdir -p "$IMAGES_DIR"
+mkdir -p "$VIDEOS_DIR"
+mkdir -p "$DOCUMENTS_DIR"
+mkdir -p "$ARCHIVES_DIR"
+
+echo "Organizing Downloads folder..."
+echo "Source: $DOWNLOADS_DIR"
+echo ""
+
+# Image extensions
+IMAGE_EXTENSIONS="jpg|jpeg|png|gif|bmp|svg|webp|ico|tiff|heic"
+
+# Video extensions
+VIDEO_EXTENSIONS="mp4|avi|mkv|mov|flv|wmv|webm|m4v|mpg|mpeg|3gp|ogv"
+
+# Document extensions
+DOCUMENT_EXTENSIONS="pdf|doc|docx|txt|xls|xlsx|ppt|pptx|odt|ods|odp|pages|numbers|keynote|rtf|csv|json|xml"
+
+# Archive extensions
+ARCHIVE_EXTENSIONS="zip|rar|7z|tar|gz|bz2|xz|iso|dmg|pkg"
+
+# Counter variables
+images_moved=0
+videos_moved=0
+documents_moved=0
+archives_moved=0
+
+# Helper function to find files across Linux (GNU find) and macOS (BSD find)
+find_by_extension() {
+    local ext_pattern="$1"
+    if find . -maxdepth 0 -regextype posix-extended >/dev/null 2>&1; then
+        find "$DOWNLOADS_DIR" -type f -regextype posix-extended -iregex ".*\.($ext_pattern)$" \
+            ! -path "$IMAGES_DIR/*" \
+            ! -path "$VIDEOS_DIR/*" \
+            ! -path "$DOCUMENTS_DIR/*" \
+            ! -path "$ARCHIVES_DIR/*" \
+            -print0
+    else
+        find -E "$DOWNLOADS_DIR" -type f -iregex ".*\.($ext_pattern)$" \
+            ! -path "$IMAGES_DIR/*" \
+            ! -path "$VIDEOS_DIR/*" \
+            ! -path "$DOCUMENTS_DIR/*" \
+            ! -path "$ARCHIVES_DIR/*" \
+            -print0
+    fi
+}
+
+# Move Images
+echo "Moving images..."
+while IFS= read -r -d '' file; do
+    if [ -f "$file" ]; then
+        if mv "$file" "$IMAGES_DIR/"; then
+            ((images_moved++))
+        fi
+    fi
+done < <(find_by_extension "$IMAGE_EXTENSIONS")
+
+# Move Videos
+echo "Moving videos..."
+while IFS= read -r -d '' file; do
+    if [ -f "$file" ]; then
+        if mv "$file" "$VIDEOS_DIR/"; then
+            ((videos_moved++))
+        fi
+    fi
+done < <(find_by_extension "$VIDEO_EXTENSIONS")
+
+# Move Documents
+echo "Moving documents..."
+while IFS= read -r -d '' file; do
+    if [ -f "$file" ]; then
+        if mv "$file" "$DOCUMENTS_DIR/"; then
+            ((documents_moved++))
+        fi
+    fi
+done < <(find_by_extension "$DOCUMENT_EXTENSIONS")
+
+# Move Archives
+echo "Moving archives..."
+while IFS= read -r -d '' file; do
+    if [ -f "$file" ]; then
+        if mv "$file" "$ARCHIVES_DIR/"; then
+            ((archives_moved++))
+        fi
+    fi
+done < <(find_by_extension "$ARCHIVE_EXTENSIONS")
+
+# Print summary
+echo ""
+echo "=== Organization Complete ==="
+echo "Images moved: $images_moved"
+echo "Videos moved: $videos_moved"
+echo "Documents moved: $documents_moved"
+echo "Archives moved: $archives_moved"
+echo ""
+echo "Files organized into:"
+echo "  • $IMAGES_DIR"
+echo "  • $VIDEOS_DIR"
+echo "  • $DOCUMENTS_DIR"
+echo "  • $ARCHIVES_DIR"

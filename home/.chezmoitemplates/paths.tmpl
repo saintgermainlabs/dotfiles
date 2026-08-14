@@ -1,0 +1,24 @@
+{{- /* Append chezmoidata/paths.toml dirs to PATH at the end (lowest priority).
+       Expected context: root data dict (.role, .modules, .paths).
+       Emits a leading/trailing blank line only when paths are present.
+*/ -}}
+{{- $paths := dig "paths" (dict) . -}}
+{{- $suffix := "" -}}
+{{- range $d := dig "common" (list) $paths -}}
+{{-   $suffix = printf "%s:%s" $suffix $d -}}
+{{- end -}}
+{{- if eq .role "local" -}}
+{{-   range $d := dig "local" (list) $paths -}}
+{{-     $suffix = printf "%s:%s" $suffix $d -}}
+{{-   end -}}
+{{- end -}}
+{{- if eq .role "remote" -}}
+{{-   range $d := dig "remote" (list) $paths -}}
+{{-     $suffix = printf "%s:%s" $suffix $d -}}
+{{-   end -}}
+{{- end -}}
+{{- if $suffix -}}
+{{- printf "\n\n" -}}
+# Appended PATH entries (chezmoidata/paths.toml) — lowest priority.
+export PATH="$PATH{{ $suffix }}"
+{{- end -}}

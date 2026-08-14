@@ -41,6 +41,10 @@ case $- in
   *i*)
     # shellcheck source=aliases.sh
     . "$_cm_module_dir/aliases.sh"
+    # shellcheck source=completions.bash
+    [ -r "$_cm_module_dir/completions.bash" ] && . "$_cm_module_dir/completions.bash"
+    # shellcheck source=completions.zsh
+    [ -r "$_cm_module_dir/completions.zsh" ] && . "$_cm_module_dir/completions.zsh"
     ;;
 esac
 
