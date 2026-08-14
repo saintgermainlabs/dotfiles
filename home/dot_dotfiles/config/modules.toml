@@ -13,6 +13,10 @@ manage_install = true
 enabled = true
 runtime = "host"
 
+[modules.hermes]
+enabled = true
+runtime = "host"
+
 [modules.local_to_remote]
 enabled = true
 runtime = "host"

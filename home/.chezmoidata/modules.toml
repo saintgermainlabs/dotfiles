@@ -45,6 +45,10 @@ description = "Vault CLI helpers under ~/.dotfiles/modules/hashicorp-vault"
 enabled = true
 description = "Remote OpenClaw helpers (SSH + docker exec) under ~/.dotfiles/modules/openclaw"
 
+[modules.hermes]
+enabled = true
+description = "Remote Hermes Agent helpers (SSH + docker exec) under ~/.dotfiles/modules/hermes"
+
 [modules.mise]
 enabled = true
 description = "Additive mise tools via ~/.config/mise/conf.d/dotfiles.toml (never overwrites config.toml)"
