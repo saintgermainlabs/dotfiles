@@ -17,6 +17,11 @@ runtime = "host"
 enabled = true
 runtime = "host"
 
+[modules.hermes-v2]
+enabled = true
+runtime = "docker"
+roles = ["local"]
+
 [modules.local_to_remote]
 enabled = true
 runtime = "host"

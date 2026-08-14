@@ -2,16 +2,17 @@
      Prefer module.sh (loads functions + interactive aliases). Else functions.sh,
      aliases.sh, or legacy functions (docker). install.sh/README/config not sourced.
 
-     local_to_remote is only sourced when .role == "local".
+     local_to_remote and hermes-v2 are only sourced when .role == "local".
 */ -}}
 
 {{- $skip := list "common" "git" "ssh" "gui" "nautilus" "nautilus_extensions" "thunar" "mise" -}}
+{{- $localOnly := list "local_to_remote" "hermes-v2" -}}
 
 {{- range $name, $on := .modules }}
 {{- if and $on (not (has $name $skip)) }}
 
-{{- /* Skip local_to_remote unless this machine has role=local */ -}}
-{{- if or (ne $name "local_to_remote") (eq $.role "local") }}
+{{- /* Skip laptop-only modules unless this machine has role=local */ -}}
+{{- if or (not (has $name $localOnly)) (eq $.role "local") }}
 
 # module: {{ $name }}
 _df_mod="${DF_DIR}/modules/{{ $name }}"

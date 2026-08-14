@@ -53,13 +53,13 @@ hm_plugin_install owner/repo
 
 # Shell / arbitrary commands in the container
 hm_sh
-hm_exec ls /opt/data
+hm_exec ls /home
 ```
 
 ## Config download / edit / upload
 
-Hermes stores configuration as YAML at `/opt/data/config.yaml` inside the
-container (`hermes config path` is used when it works).
+Hermes stores configuration as YAML at `/home/config.yaml` inside the
+container (then `/home/.hermes/config.yaml`, then `hermes config path`).
 
 ```bash
 # Download to ~/.cache/hermes/config.yaml
@@ -68,13 +68,23 @@ hm_config_get
 # Download to a specific path
 hm_config_get ~/Downloads/hermes-config.yaml
 
-# Edit locally (Sublime by default), validate YAML, then prompt to upload
+# Edit locally in Sublime Text (default), validate YAML, then prompt to upload
 hm_config_edit
 hm_config_edit --editor nano
 hm_config_edit --editor vscode
 
 # Upload a previously edited file (creates a timestamped backup in the container)
 hm_config_put ~/.cache/hermes/config.yaml
+```
+
+The default editor is **Sublime Text**. Persist an override in
+`~/.config/hermes/environment` (see `hermes.env.example`):
+
+```bash
+mkdir -p ~/.config/hermes
+cp ~/.dotfiles/modules/hermes/hermes.env.example ~/.config/hermes/environment
+chmod 0600 ~/.config/hermes/environment
+# HERMES_CONFIG_EDITOR="/usr/bin/subl -w"
 ```
 
 Do not use these helpers for `.env` — that file holds API keys.

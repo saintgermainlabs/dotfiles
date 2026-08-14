@@ -49,6 +49,10 @@ description = "Remote OpenClaw helpers (SSH + docker exec) under ~/.dotfiles/mod
 enabled = true
 description = "Remote Hermes Agent helpers (SSH + docker exec) under ~/.dotfiles/modules/hermes"
 
+[modules.hermes-v2]
+enabled = true
+description = "Local Hermes Gate TUI client (clone + docker) under ~/.dotfiles/modules/hermes-v2"
+
 [modules.mise]
 enabled = true
 description = "Additive mise tools via ~/.config/mise/conf.d/dotfiles.toml (never overwrites config.toml)"

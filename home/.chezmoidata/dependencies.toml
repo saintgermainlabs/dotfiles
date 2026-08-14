@@ -31,6 +31,15 @@ description = "Docker helpers module"
 [dependencies.docker.roles.local]
 lazydocker = "latest"
 
+[dependencies.hermes-v2]
+description = "Hermes Gate local TUI client (requires modules.hermes-v2; laptop only)"
+
+[dependencies.hermes-v2.system]
+docker = "Local Docker daemon for the hermes-gate TUI container"
+git = "Clone https://github.com/LehaoLin/hermes-gate (not vendored)"
+ssh = "SSH client; Gate mounts ~/.ssh read-only into the container"
+libnotify-bin = "Optional desktop notifications (notify-send)"
+
 [dependencies.hashicorp-vault]
 description = "HashiCorp Vault CLI and shell helpers (requires modules.hashicorp-vault)"
 

@@ -6,6 +6,10 @@
 : "${HERMES_SSH_HOST:=ubuntu}"
 : "${HERMES_APP_CONTAINER:=}"
 : "${HERMES_SSH_OPTS:=-o BatchMode=yes}"
+# Default editor for hm_config_edit is Sublime Text (`subl -w`).
+# Override in ~/.config/hermes/environment, e.g.:
+#   HERMES_CONFIG_EDITOR="subl -w"
+: "${HERMES_CONFIG_EDITOR:=}"
 
 _hm_error() {
   printf 'hermes: %s\n' "$*" >&2
@@ -35,6 +39,63 @@ _hm_quote_cmd() {
   done
   printf '%s' "$_hm_out"
   unset _hm_out _hm_arg
+}
+
+# Locate Sublime Text. Prefer absolute paths so a stripped PATH still works.
+_hm_find_sublime() {
+  local _hm_candidate _hm_resolved
+  for _hm_candidate in \
+    "${HERMES_SUBLIME_BIN:-}" \
+    /usr/bin/subl \
+    /bin/subl \
+    /opt/sublime_text/sublime_text \
+    /usr/bin/sublime_text \
+    subl \
+    sublime_text
+  do
+    [ -n "$_hm_candidate" ] || continue
+    if [ -x "$_hm_candidate" ]; then
+      printf '%s\n' "$_hm_candidate"
+      return 0
+    fi
+    _hm_resolved="$(command -v "$_hm_candidate" 2>/dev/null)" || true
+    if [ -n "$_hm_resolved" ] && [ -x "$_hm_resolved" ]; then
+      printf '%s\n' "$_hm_resolved"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Resolve the editor command. Default: Sublime Text, waiting for the window.
+# Override with HERMES_CONFIG_EDITOR or --editor sublime|nano|vscode.
+_hm_resolve_editor() {
+  local _hm_name="${1:-}" _hm_bin
+
+  if [ -n "$_hm_name" ]; then
+    case "$_hm_name" in
+      sublime|subl)
+        _hm_bin="$(_hm_find_sublime)" || return 1
+        printf '%s -w' "$_hm_bin"
+        return 0
+        ;;
+      nano) printf '%s' "nano"; return 0 ;;
+      vscode|code) printf '%s' "code -w"; return 0 ;;
+      *)
+        _hm_error "unknown editor: $_hm_name"
+        _hm_error "choose one of: sublime, nano, vscode"
+        return 2
+        ;;
+    esac
+  fi
+
+  if [ -n "${HERMES_CONFIG_EDITOR:-}" ]; then
+    printf '%s' "$HERMES_CONFIG_EDITOR"
+    return 0
+  fi
+
+  _hm_bin="$(_hm_find_sublime)" || return 1
+  printf '%s -w' "$_hm_bin"
 }
 
 # Reject obviously broken YAML before upload. Uses PyYAML when available;
@@ -184,7 +245,7 @@ Usage:
 Env:
   HERMES_SSH_HOST          SSH host (default: ubuntu)
   HERMES_APP_CONTAINER     Pin container name (skip discovery)
-  HERMES_CONFIG_EDITOR     Editor command for hm_config_edit
+  HERMES_CONFIG_EDITOR     Editor command (default: Sublime Text, subl -w)
 EOF
     return 0
   fi
@@ -310,15 +371,35 @@ hm_plugin_list() {
 #   hm_config_path
 #
 # Prints the container path, for example:
-#   /opt/data/config.yaml
+#   /home/config.yaml
 hm_config_path() {
   local _hm_container _hm_path
 
   _hm_require_ssh || return
   _hm_container="$(_hm_container)" || return
 
-  # Ask Hermes first, then fall back to the Docker data volume layout.
-  _hm_path="$(hm_exec hermes config path 2>/dev/null | tr -d '\r' | head -n 1)"
+  # This Coolify layout keeps Hermes home under /home, then ask the CLI,
+  # then fall back to the published-image /opt/data path.
+  _hm_path="$(
+    # shellcheck disable=SC2086
+    ssh $HERMES_SSH_OPTS "$HERMES_SSH_HOST" \
+      "docker exec $(_hm_quote "$_hm_container") sh -c '
+        if [ -f /home/config.yaml ]; then
+          printf \"%s\\n\" /home/config.yaml
+        elif [ -f /home/.hermes/config.yaml ]; then
+          printf \"%s\\n\" /home/.hermes/config.yaml
+        else
+          found=\$(find /home -type f -name config.yaml 2>/dev/null | head -n 1)
+          if [ -n \"\$found\" ]; then
+            printf \"%s\\n\" \"\$found\"
+          fi
+        fi
+      '" 2>/dev/null
+  )"
+
+  if [ -z "$_hm_path" ]; then
+    _hm_path="$(hm_exec hermes config path 2>/dev/null | tr -d '\r' | head -n 1)"
+  fi
 
   if [ -z "$_hm_path" ]; then
     _hm_path="$(
@@ -330,7 +411,7 @@ hm_config_path() {
           elif [ -f /opt/data/.hermes/config.yaml ]; then
             printf \"%s\\n\" /opt/data/.hermes/config.yaml
           else
-            find /opt/data /root /home \
+            find /opt/data /root \
               -type f \
               -name config.yaml \
               2>/dev/null |
@@ -510,10 +591,10 @@ hm_config_put() {
 #   hm_config_edit --editor nano
 #   hm_config_edit --editor vscode
 #
-# Editors: sublime (default), nano, vscode.
-#
-# Optional editor override:
+# Default editor is Sublime Text (`subl -w`). Override with:
+#   HERMES_CONFIG_EDITOR in ~/.config/hermes/environment
 #   HERMES_CONFIG_EDITOR="code -w" hm_config_edit
+#   hm_config_edit --editor nano
 #
 # The local working copy is retained at:
 #   ~/.cache/hermes/config.yaml
@@ -546,26 +627,26 @@ hm_config_edit() {
     esac
   done
 
-  # Resolve editor: --editor flag > HERMES_CONFIG_EDITOR > default.
-  if [ -n "$_hm_editor_name" ]; then
-    case "$_hm_editor_name" in
-      sublime)  _hm_editor="subl -w" ;;
-      nano)     _hm_editor="nano" ;;
-      vscode)   _hm_editor="code -w" ;;
-      *)
-        _hm_error "unknown editor: $_hm_editor_name"
-        _hm_error "choose one of: sublime, nano, vscode"
-        return 2
-        ;;
-    esac
-  else
-    _hm_editor="${HERMES_CONFIG_EDITOR:-subl -w}"
-  fi
+  # Resolve editor: --editor flag > HERMES_CONFIG_EDITOR > Sublime Text.
+  _hm_editor="$(_hm_resolve_editor "$_hm_editor_name")" || {
+    _hm_status=$?
+    if [ "$_hm_status" -eq 2 ]; then
+      unset _hm_file _hm_editor _hm_editor_name _hm_answer _hm_bin _hm_have_tty
+      return 2
+    fi
+    _hm_error "Sublime Text not found (tried /usr/bin/subl and sublime_text)"
+    _hm_error "set HERMES_CONFIG_EDITOR in ~/.config/hermes/environment"
+    _hm_error "example: HERMES_CONFIG_EDITOR=\"/usr/bin/subl -w\""
+    _hm_error "or run: hm_config_edit --editor nano"
+    unset _hm_file _hm_editor _hm_editor_name _hm_answer _hm_bin _hm_have_tty
+    return 127
+  }
 
   _hm_bin="${_hm_editor%% *}"
-  if ! command -v "$_hm_bin" >/dev/null 2>&1; then
+  if [ ! -x "$_hm_bin" ] && ! command -v "$_hm_bin" >/dev/null 2>&1; then
     _hm_error "editor not found: $_hm_bin"
-    _hm_error "try: hm_config_edit --editor nano"
+    _hm_error "set HERMES_CONFIG_EDITOR in ~/.config/hermes/environment"
+    _hm_error "example: HERMES_CONFIG_EDITOR=\"/usr/bin/subl -w\""
     unset _hm_file _hm_editor _hm_editor_name _hm_answer _hm_bin _hm_have_tty
     return 127
   fi
