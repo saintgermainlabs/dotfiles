@@ -1,0 +1,285 @@
+#!/usr/bin/python3
+"""Resource watchdog (BALANCED): kill runaway user processes.
+
+Rules:
+  - CPU: same process stays >= 90% for ~20s (poll every 2s → 10 consecutive samples)
+  - RAM: if system memory used > 95%, SIGTERM the largest-RSS user process
+    (never root / protected names)
+
+Env:
+  RESOURCE_WATCHDOG_DRY_RUN=1  — log only, never signal
+"""
+from __future__ import annotations
+
+import os
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+POLL_SEC = 2.0
+CPU_THRESHOLD = 90.0          # percent of one core
+CPU_STREAK_NEEDED = 10        # 10 * 2s ≈ 20s
+MEM_USED_THRESHOLD = 0.95     # system-wide
+COOLDOWN_SEC = 30.0
+TERM_WAIT_SEC = 3.0
+LOG_PATH = Path.home() / ".cache" / "resource-watchdog.log"
+
+DRY_RUN = os.environ.get("RESOURCE_WATCHDOG_DRY_RUN", "").strip() in ("1", "true", "yes")
+MY_UID = os.getuid()
+MY_PID = os.getpid()
+
+# Basename / substring deny-list (case-sensitive match on comm or argv0 basename).
+PROTECTED_EXACT = {
+    "systemd", "systemd-journald", "systemd-logind", "systemd-resolved",
+    "systemd-udevd", "systemd-timesyncd", "systemd-networkd",
+    "dbus-daemon", "dbus-broker", "dbus-broker-launch",
+    "pipewire", "pipewire-pulse", "pipewire-media-session",
+    "pulseaudio", "wireplumber",
+    "Xorg", "Xwayland", "X",
+    "gnome-shell", "cinnamon", "mutter", "cinnamon-session", "gnome-session",
+    "gdm", "gdm3", "gdm-session-worker", "lightdm", "sddm", "sddm-helper",
+    "sshd", "ssh", "NetworkManager", "nm-dispatcher",
+    "resource-watchdog",
+    "init",
+}
+PROTECTED_PREFIXES = (
+    "systemd-", "gdm-", "gnome-", "cinnamon-", "pipewire", "xdg-desktop-portal",
+)
+
+
+def log(msg: str) -> None:
+    line = time.strftime("%Y-%m-%d %H:%M:%S") + " " + msg
+    try:
+        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with LOG_PATH.open("a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
+    try:
+        print(line, flush=True)
+    except OSError:
+        pass
+
+
+def notify(title: str, body: str) -> None:
+    if DRY_RUN:
+        return
+    try:
+        subprocess.Popen(
+            ["notify-send", "--app-name=Resource Watchdog", "-u", "critical", title, body],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError:
+        pass
+
+
+def clk_tck() -> int:
+    try:
+        return os.sysconf(os.sysconf_names["SC_CLK_TCK"])
+    except (AttributeError, ValueError, OSError):
+        return 100
+
+
+CLK = clk_tck()
+
+
+def meminfo() -> tuple[float, float]:
+    """Return (used_ratio, total_bytes). used = 1 - MemAvailable/MemTotal."""
+    total = avail = 0
+    try:
+        with open("/proc/meminfo", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    total = int(line.split()[1]) * 1024
+                elif line.startswith("MemAvailable:"):
+                    avail = int(line.split()[1]) * 1024
+    except OSError:
+        return 0.0, 0
+    if total <= 0:
+        return 0.0, 0
+    return max(0.0, min(1.0, 1.0 - (avail / total))), total
+
+
+def is_protected(pid: int, comm: str, exe_base: str) -> bool:
+    if pid <= 1 or pid == MY_PID:
+        return True
+    # Kernel threads: comm in brackets, or no /proc/pid/exe
+    if comm.startswith("[") and comm.endswith("]"):
+        return True
+    names = {comm, exe_base}
+    for n in names:
+        if not n:
+            continue
+        if n in PROTECTED_EXACT:
+            return True
+        for pref in PROTECTED_PREFIXES:
+            if n.startswith(pref):
+                return True
+    return False
+
+
+def iter_user_procs():
+    """Yield dicts for processes owned by MY_UID."""
+    try:
+        pids = [int(e) for e in os.listdir("/proc") if e.isdigit()]
+    except OSError:
+        return
+    for pid in pids:
+        if pid <= 1 or pid == MY_PID:
+            continue
+        base = f"/proc/{pid}"
+        try:
+            st = os.stat(base)
+            if st.st_uid != MY_UID:
+                continue
+            with open(f"{base}/stat", encoding="utf-8", errors="replace") as f:
+                stat_line = f.read()
+            # comm is in parentheses and may contain spaces; split carefully
+            lpar = stat_line.find("(")
+            rpar = stat_line.rfind(")")
+            if lpar < 0 or rpar < 0:
+                continue
+            comm = stat_line[lpar + 1 : rpar]
+            rest = stat_line[rpar + 2 :].split()
+            # fields after comm: state(0), ppid(1), ... utime(11), stime(12), ... rss(21)
+            if len(rest) < 22:
+                continue
+            utime = int(rest[11])
+            stime = int(rest[12])
+            rss_pages = int(rest[21])
+            rss = rss_pages * os.sysconf("SC_PAGESIZE")
+            exe_base = ""
+            try:
+                exe = os.readlink(f"{base}/exe")
+                exe_base = os.path.basename(exe)
+            except OSError:
+                exe_base = ""
+            if is_protected(pid, comm, exe_base):
+                continue
+            name = exe_base or comm
+            yield {
+                "pid": pid,
+                "name": name,
+                "comm": comm,
+                "jiffies": utime + stime,
+                "rss": rss,
+            }
+        except (OSError, ValueError, IndexError):
+            continue
+
+
+def kill_process(proc: dict, reason: str, cpu: float | None, mem_ratio: float) -> None:
+    pid = proc["pid"]
+    name = proc["name"]
+    rss_mb = proc["rss"] / (1024 * 1024)
+    cpu_s = f"{cpu:.1f}%" if cpu is not None else "n/a"
+    mem_s = f"{mem_ratio * 100:.1f}%"
+    prefix = "DRY-RUN would kill" if DRY_RUN else "Killing"
+    log(
+        f"{prefix} pid={pid} name={name} reason={reason} "
+        f"cpu={cpu_s} rss_mb={rss_mb:.1f} sys_mem={mem_s}"
+    )
+    notify(
+        "Resource watchdog",
+        f"{'Would kill' if DRY_RUN else 'Killed'} {name} (pid {pid})\n"
+        f"reason={reason} cpu={cpu_s} rss={rss_mb:.0f}MiB",
+    )
+    if DRY_RUN:
+        return
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError as e:
+        log(f"SIGTERM failed pid={pid}: {e}")
+        return
+    deadline = time.monotonic() + TERM_WAIT_SEC
+    while time.monotonic() < deadline:
+        if not os.path.exists(f"/proc/{pid}"):
+            log(f"pid={pid} exited after SIGTERM")
+            return
+        time.sleep(0.25)
+    try:
+        os.kill(pid, signal.SIGKILL)
+        log(f"SIGKILL sent pid={pid} name={name}")
+    except OSError as e:
+        log(f"SIGKILL failed pid={pid}: {e}")
+
+
+def main() -> int:
+    log(
+        f"started uid={MY_UID} pid={MY_PID} dry_run={int(DRY_RUN)} "
+        f"cpu>={CPU_THRESHOLD}% for {CPU_STREAK_NEEDED * POLL_SEC:.0f}s "
+        f"or sys_mem>{MEM_USED_THRESHOLD * 100:.0f}%"
+    )
+    # pid -> (last_jiffies, streak_count)
+    cpu_state: dict[int, tuple[int, int]] = {}
+    last_sample = time.monotonic()
+    last_kill = 0.0
+
+    while True:
+        time.sleep(POLL_SEC)
+        now = time.monotonic()
+        dt = max(0.001, now - last_sample)
+        last_sample = now
+
+        mem_ratio, _total = meminfo()
+        procs = list(iter_user_procs())
+        seen = set()
+
+        # --- CPU streak ---
+        for proc in procs:
+            pid = proc["pid"]
+            seen.add(pid)
+            prev = cpu_state.get(pid)
+            jiffies = proc["jiffies"]
+            if prev is None:
+                cpu_state[pid] = (jiffies, 0)
+                continue
+            prev_j, streak = prev
+            delta_j = max(0, jiffies - prev_j)
+            cpu_pct = (delta_j / CLK) / dt * 100.0
+            if cpu_pct >= CPU_THRESHOLD:
+                streak += 1
+            else:
+                streak = 0
+            cpu_state[pid] = (jiffies, streak)
+
+            if streak >= CPU_STREAK_NEEDED and (now - last_kill) >= COOLDOWN_SEC:
+                kill_process(proc, f"cpu>={CPU_THRESHOLD}%_for_{int(CPU_STREAK_NEEDED * POLL_SEC)}s",
+                             cpu_pct, mem_ratio)
+                last_kill = now
+                cpu_state[pid] = (jiffies, 0)
+                break  # one kill per loop / cooldown
+
+        # Drop disappeared pids
+        for pid in list(cpu_state):
+            if pid not in seen:
+                del cpu_state[pid]
+
+        # --- System RAM pressure: largest user RSS ---
+        if mem_ratio > MEM_USED_THRESHOLD and (now - last_kill) >= COOLDOWN_SEC:
+            if procs:
+                target = max(procs, key=lambda p: p["rss"])
+                # Recompute rough cpu for log
+                st = cpu_state.get(target["pid"])
+                cpu_pct = None
+                if st is not None:
+                    # last interval estimate not stored; leave n/a unless streak info
+                    cpu_pct = None
+                kill_process(
+                    target,
+                    f"sys_mem>{MEM_USED_THRESHOLD * 100:.0f}%_largest_rss",
+                    cpu_pct,
+                    mem_ratio,
+                )
+                last_kill = now
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main() or 0)
+    except KeyboardInterrupt:
+        log("stopped (KeyboardInterrupt)")
+        sys.exit(0)

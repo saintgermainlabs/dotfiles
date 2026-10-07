@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Enable the resource watchdog user service after chezmoi writes the unit.
+# Re-runs only when the unit or script content changes:
+#   unit:   {{ include "dot_config/systemd/user/resource-watchdog.service" | sha256sum }}
+#   script: {{ include "dot_local/bin/executable_resource-watchdog" | sha256sum }}
+# Idempotent: daemon-reload + enable --now are safe to repeat. Skips quietly
+# when no systemd user manager is reachable (e.g. headless host without lingering).
+set -u
+
+if ! command -v systemctl >/dev/null 2>&1; then
+  echo "resource-watchdog: systemctl not found; skipping enable" >&2
+  exit 0
+fi
+if ! systemctl --user show-environment >/dev/null 2>&1; then
+  echo "resource-watchdog: no systemd --user session; skipping enable" >&2
+  exit 0
+fi
+
+systemctl --user daemon-reload
+if systemctl --user enable --now resource-watchdog.service; then
+  # Restart so a changed script/unit takes effect on re-run.
+  systemctl --user try-restart resource-watchdog.service || true
+else
+  echo "resource-watchdog: enable failed (non-fatal)" >&2
+fi
+exit 0
