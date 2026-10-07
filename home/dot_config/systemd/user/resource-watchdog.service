@@ -1,20 +1,19 @@
 [Unit]
 Description=Resource watchdog (CPU/memory runaway killer)
-Documentation=file:///home/god/.local/bin/resource-watchdog
 After=default.target
 PartOf=default.target
 
 [Service]
 Type=simple
-ExecStart=/home/god/.local/bin/resource-watchdog
+ExecStart=%h/.local/bin/resource-watchdog
 Restart=always
 RestartSec=5
 # Low priority / cost
 Nice=10
 CPUSchedulingPolicy=idle
 OOMScoreAdjust=-500
-Environment=HOME=/home/god
-Environment=PATH=/home/god/.local/bin:/usr/local/bin:/usr/bin:/bin
+# HOME is set by the systemd user manager; %h expands to it.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 # Uncomment to test without killing:
 # Environment=RESOURCE_WATCHDOG_DRY_RUN=1
 
