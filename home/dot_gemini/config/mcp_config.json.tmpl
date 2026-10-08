@@ -1,0 +1,73 @@
+{
+  "mcpServers": {
+    "MetaMCP": {
+      "headers": {
+        "Authorization": "Bearer ${env:METAMCP_API_KEY}"
+      },
+      "url": "https://metamcp.tiger-bushmaster.ts.net/metamcp/openagyclaw/mcp"
+    },
+    "evolution-api": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@marcelocorrea/mcp-evolution-api"
+      ],
+      "env": {
+        "EVOLUTION_API_URL": "https://evo.sg-labs.xyz",
+        "EVOLUTION_API_KEY": "${env:EVOLUTION_API_KEY}",
+        "EVOLUTION_INSTANCE_NAME": "suspiros_instance"
+      }
+    },
+    "resend": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "resend-mcp"
+      ],
+      "env": {
+        "RESEND_API_KEY": "${env:RESEND_API_KEY}",
+        "SENDER_EMAIL_ADDRESS": "onboarding@resend.dev"
+      }
+    },
+    "mem0": {
+      "command": "/home/god/.local/share/mise/installs/python/3.14.6/bin/mem0-mcp-server",
+      "env": {
+        "MEM0_API_KEY": "${env:MEM0_API_KEY}"
+      }
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ]
+    },
+    "postgres": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@microsoft/postgres-mcp",
+        "run"
+      ]
+    },
+    "mercadopago-mcp-server": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.mercadopago.com/mcp",
+        "--header",
+        "Authorization:${AUTH_HEADER}"
+      ],
+      "env": {
+        "AUTH_HEADER": "Bearer ${env:MERCADOPAGO_ACCESS_TOKEN}"
+      }
+    }
+  }
+}

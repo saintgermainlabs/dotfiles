@@ -3,7 +3,9 @@
 
 Rules:
   - CPU: same process stays >= 90% for ~20s (poll every 2s → 10 consecutive samples)
-  - RAM: if system memory used > 95%, SIGTERM the largest-RSS user process
+  - RAM: if system memory used > 95%, SIGTERM the most-unused heavy process
+    (highest rss / (1 + recent_cpu%) — big but idle goes first)
+    IDEs and editors are whitelisted and never killed.
     (never root / protected names)
 
 Env:
@@ -43,9 +45,27 @@ PROTECTED_EXACT = {
     "sshd", "ssh", "NetworkManager", "nm-dispatcher",
     "resource-watchdog",
     "init",
+    # IDEs / editors — never kill, even when memory-hungry
+    "code", "code-oss", "vscodium", "cursor", "code-cursor",
+    "sublime_text", "subl",
+    "qoder", "antigravity", "antigravity2",
+    "claude-desktop", "claude", "grok-bot", "dyad",
+    "pycharm", "pycharm.sh", "idea", "idea.sh",
+    "webstorm", "webstorm.sh", "goland", "goland.sh",
+    "rust-rover", "rust-rover.sh", "clion", "clion.sh",
+    "phpstorm", "phpstorm.sh", "rubymine", "rubymine.sh",
+    "datagrip", "datagrip.sh", "fleet",
+    "emacs", "emacsclient", "vim", "nvim",
+    "atom", "geany", "kate", "xed", "mousepad",
 }
 PROTECTED_PREFIXES = (
     "systemd-", "gdm-", "gnome-", "cinnamon-", "pipewire", "xdg-desktop-portal",
+)
+# Substrings in /proc/pid/cmdline that indicate a JetBrains IDE (runs as java).
+PROTECTED_CMDLINE_SUBSTRINGS = (
+    "jetbrains",
+    "-Didea.",
+    "com.jetbrains.",
 )
 
 
@@ -118,6 +138,15 @@ def is_protected(pid: int, comm: str, exe_base: str) -> bool:
         for pref in PROTECTED_PREFIXES:
             if n.startswith(pref):
                 return True
+    # JetBrains IDEs run as java — check cmdline for product markers.
+    if comm == "java" or exe_base == "java":
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                cmdline = f.read().replace(b"\x00", b" ").decode("utf-8", errors="replace").lower()
+            if any(s in cmdline for s in PROTECTED_CMDLINE_SUBSTRINGS):
+                return True
+        except OSError:
+            pass
     return False
 
 
@@ -228,6 +257,10 @@ def main() -> int:
         procs = list(iter_user_procs())
         seen = set()
 
+        # Snapshot before the CPU loop mutates cpu_state, so the RAM scorer
+        # can compute recent CPU% from the *previous* interval's jiffies.
+        prev_cpu_state = dict(cpu_state)
+
         # --- CPU streak ---
         for proc in procs:
             pid = proc["pid"]
@@ -258,20 +291,27 @@ def main() -> int:
             if pid not in seen:
                 del cpu_state[pid]
 
-        # --- System RAM pressure: largest user RSS ---
+        # --- System RAM pressure: most-unused heavy process ---
+        # Pick the process with the highest score = rss / (1 + recent_cpu_pct).
+        # This kills big memory hogs that are idle, sparing active ones.
         if mem_ratio > MEM_USED_THRESHOLD and (now - last_kill) >= COOLDOWN_SEC:
             if procs:
-                target = max(procs, key=lambda p: p["rss"])
-                # Recompute rough cpu for log
-                st = cpu_state.get(target["pid"])
-                cpu_pct = None
-                if st is not None:
-                    # last interval estimate not stored; leave n/a unless streak info
-                    cpu_pct = None
+                scored = []
+                for p in procs:
+                    prev = prev_cpu_state.get(p["pid"])
+                    if prev is not None:
+                        delta_j = max(0, p["jiffies"] - prev[0])
+                        cpu_pct = (delta_j / CLK) / dt * 100.0
+                    else:
+                        cpu_pct = 0.0
+                    score = p["rss"] / (1.0 + cpu_pct)
+                    scored.append((score, cpu_pct, p))
+                scored.sort(key=lambda t: t[0], reverse=True)
+                best_score, best_cpu, target = scored[0]
                 kill_process(
                     target,
-                    f"sys_mem>{MEM_USED_THRESHOLD * 100:.0f}%_largest_rss",
-                    cpu_pct,
+                    f"sys_mem>{MEM_USED_THRESHOLD * 100:.0f}%_most_unused_heavy",
+                    best_cpu,
                     mem_ratio,
                 )
                 last_kill = now

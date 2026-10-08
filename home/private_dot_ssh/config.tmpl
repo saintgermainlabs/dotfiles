@@ -1,4 +1,23 @@
 {{- if .modules.ssh -}}
+# DevPod Start openclaw-portal.devpod
+Host openclaw-portal.devpod
+  ForwardAgent yes
+  LogLevel error
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  HostKeyAlgorithms rsa-sha2-256,rsa-sha2-512,ssh-rsa
+  ProxyCommand "/usr/local/bin/devpod" ssh --stdio --context default --user node openclaw-portal --workdir "/workspaces/project"
+  User node
+# DevPod End openclaw-portal.devpod
+# Gitea (Tailnet). Dedicated key so the 1Password agent is not offered.
+Host gitea.tiger-bushmaster.ts.net
+    HostName gitea.tiger-bushmaster.ts.net
+    Port 2222
+    User git
+    IdentitiesOnly yes
+    IdentityFile ~/.ssh/id_ed25519_gitea
+    IdentityAgent none
+
 Host *
     ServerAliveInterval 60
     ServerAliveCountMax 3
@@ -43,7 +62,7 @@ Host antigravity
     User antigravity-admin
 
 Host ubuntu
-    HostName 78.46.62.234
+    HostName 100.70.96.19
     IdentityFile ~/.ssh/id_ed25519
     IdentitiesOnly yes
     User dom
