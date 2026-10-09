@@ -5,8 +5,15 @@ Rules:
   - CPU: same process stays >= 90% for ~20s (poll every 2s → 10 consecutive samples)
   - RAM: if system memory used > 95%, SIGTERM the most-unused heavy process
     (highest rss / (1 + recent_cpu%) — big but idle goes first)
-    IDEs and editors are whitelisted and never killed.
-    (never root / protected names)
+    (never root / system processes)
+  - Protected (never killed): IDEs, editors and coding agents, matched
+    case-insensitively (regex) on process name, exe path and cmdline.
+    Patterns: ~/.config/resource-watchdog/protected.txt (seeded with defaults,
+    re-read when it changes). Lines starting with "child:" are regexes for
+    process kinds (node/python/language servers) that are also protected
+    when ANY ancestor is protected (IDE extension hosts, LSPs, agent helpers).
+  - If the top offender is protected, the next unprotected offender is used.
+    If only protected processes are hogging: log + notify, never kill.
 
 Env:
   RESOURCE_WATCHDOG_DRY_RUN=1  — log only, never signal
@@ -14,6 +21,7 @@ Env:
 from __future__ import annotations
 
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -45,28 +53,97 @@ PROTECTED_EXACT = {
     "sshd", "ssh", "NetworkManager", "nm-dispatcher",
     "resource-watchdog",
     "init",
-    # IDEs / editors — never kill, even when memory-hungry
-    "code", "code-oss", "vscodium", "cursor", "code-cursor",
-    "sublime_text", "subl",
-    "qoder", "antigravity", "antigravity2",
-    "claude-desktop", "claude", "grok-bot", "dyad",
-    "pycharm", "pycharm.sh", "idea", "idea.sh",
-    "webstorm", "webstorm.sh", "goland", "goland.sh",
-    "rust-rover", "rust-rover.sh", "clion", "clion.sh",
-    "phpstorm", "phpstorm.sh", "rubymine", "rubymine.sh",
-    "datagrip", "datagrip.sh", "fleet",
-    "emacs", "emacsclient", "vim", "nvim",
-    "atom", "geany", "kate", "xed", "mousepad",
 }
 PROTECTED_PREFIXES = (
     "systemd-", "gdm-", "gnome-", "cinnamon-", "pipewire", "xdg-desktop-portal",
 )
-# Substrings in /proc/pid/cmdline that indicate a JetBrains IDE (runs as java).
-PROTECTED_CMDLINE_SUBSTRINGS = (
-    "jetbrains",
-    "-Didea.",
-    "com.jetbrains.",
-)
+PROTECTED_FILE = Path.home() / ".config" / "resource-watchdog" / "protected.txt"
+MEM_MIN_RSS = 256 * 1024 * 1024   # an unprotected RAM victim must be at least this big
+ALERT_COOLDOWN_SEC = 300.0        # min gap between "only protected hogging" alerts
+
+DEFAULT_PROTECTED = """\
+# resource-watchdog protected processes — one case-insensitive regex per line.
+# Each pattern is searched in: process name (comm), exe path, and full cmdline.
+# Lines starting with "child:" match process kinds that are protected only when
+# an ancestor (parent, grandparent, ...) is protected.  '#' starts a comment.
+
+# --- Dyad
+\\bdyad\\b
+# --- VS Code (binary, insiders, OSS, helper processes, electron running Code)
+(^|/)code(-insiders|-oss)?($|\\s)
+code helper
+/usr/share/code(-insiders)?/
+electron.*/code/
+/code/.*electron
+# --- Other IDEs / editors
+vscodium|(^|/)codium\\b
+\\bcursor\\b
+\\bqoder\\b
+\\bwindsurf\\b
+\\bzed(-editor)?\\b|dev\\.zed\\.
+\\bkiro\\b
+antigravity
+jetbrains|(^|/)idea(\\.sh)?($|\\s)|-didea\\.|\\b(pycharm|webstorm|goland|clion|rustrover|rust-rover|phpstorm|rubymine|datagrip|fleet)\\b
+sublime_text|(^|/)subl($|\\s)
+(^|/)(emacs|emacsclient|vim|nvim|geany|kate|xed|mousepad)($|\\s)
+# --- Coding agents
+\\bclaude\\b
+\\bgrok\\b|grok[-_ ]?bot
+\\bcodex\\b
+\\bgemini\\b
+\\bkilo(code)?\\b
+\\bopencode\\b
+\\baider\\b
+nimbalyst
+
+# --- Descendants of protected processes that are spared too
+child:^(node|nodejs|bun|deno|python[0-9.]*|java)$
+child:language.?server|languageserver|\\blsp\\b|-lsp\\b|\\b(pyright|pylance|tsserver|typescript-language|gopls|rust-analyzer|clangd|jdtls|omnisharp|lua-language|bash-language|yaml-language|vscode-.*-server)
+child:extensionhost|extension-host|ptyhost|fileWatcher
+"""
+
+_pat_cache: dict = {"mtime": None, "self": [], "child": []}
+
+
+def load_patterns() -> tuple[list, list]:
+    """Return (self_patterns, child_patterns); seed the file if missing."""
+    try:
+        if not PROTECTED_FILE.exists():
+            PROTECTED_FILE.parent.mkdir(parents=True, exist_ok=True)
+            PROTECTED_FILE.write_text(DEFAULT_PROTECTED, encoding="utf-8")
+            log(f"seeded {PROTECTED_FILE}")
+        mtime = PROTECTED_FILE.stat().st_mtime
+        text = None if mtime == _pat_cache["mtime"] else PROTECTED_FILE.read_text(encoding="utf-8")
+    except OSError as e:
+        if _pat_cache["mtime"] is None:
+            log(f"cannot read {PROTECTED_FILE} ({e}); using built-in defaults")
+            mtime, text = -1, DEFAULT_PROTECTED
+        else:
+            return _pat_cache["self"], _pat_cache["child"]
+    if text is not None:
+        selfp, childp = [], []
+        for raw in text.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            target = selfp
+            if line.lower().startswith("child:"):
+                target, line = childp, line[6:].strip()
+            try:
+                target.append(re.compile(line, re.IGNORECASE))
+            except re.error as e:
+                log(f"bad pattern in {PROTECTED_FILE}: {line!r}: {e}")
+        _pat_cache.update(mtime=mtime, self=selfp, child=childp)
+        log(f"loaded {len(selfp)} protected + {len(childp)} child patterns")
+    return _pat_cache["self"], _pat_cache["child"]
+
+
+def _matches(pats: list, fields: tuple) -> str | None:
+    for rx in pats:
+        for f in fields:
+            if f and rx.search(f):
+                return rx.pattern
+    return None
 
 
 def log(msg: str) -> None:
@@ -123,14 +200,13 @@ def meminfo() -> tuple[float, float]:
     return max(0.0, min(1.0, 1.0 - (avail / total))), total
 
 
-def is_protected(pid: int, comm: str, exe_base: str) -> bool:
+def is_system_protected(pid: int, comm: str, exe_base: str) -> bool:
     if pid <= 1 or pid == MY_PID:
         return True
-    # Kernel threads: comm in brackets, or no /proc/pid/exe
+    # Kernel threads: comm in brackets
     if comm.startswith("[") and comm.endswith("]"):
         return True
-    names = {comm, exe_base}
-    for n in names:
+    for n in (comm, exe_base):
         if not n:
             continue
         if n in PROTECTED_EXACT:
@@ -138,16 +214,43 @@ def is_protected(pid: int, comm: str, exe_base: str) -> bool:
         for pref in PROTECTED_PREFIXES:
             if n.startswith(pref):
                 return True
-    # JetBrains IDEs run as java — check cmdline for product markers.
-    if comm == "java" or exe_base == "java":
-        try:
-            with open(f"/proc/{pid}/cmdline", "rb") as f:
-                cmdline = f.read().replace(b"\x00", b" ").decode("utf-8", errors="replace").lower()
-            if any(s in cmdline for s in PROTECTED_CMDLINE_SUBSTRINGS):
-                return True
-        except OSError:
-            pass
     return False
+
+
+def classify(procs: list) -> None:
+    """Set proc['protected'] (reason str or None): own match, or child-kind with a protected ancestor."""
+    selfp, childp = load_patterns()
+    by_pid = {p["pid"]: p for p in procs}
+    for p in procs:
+        p["self_match"] = _matches(selfp, (p["comm"], p["exe"], p["cmdline"]))
+    ppid_of: dict[int, int] = {}
+
+    def ppid(pid: int) -> int:
+        if pid in by_pid:
+            return by_pid[pid]["ppid"]
+        if pid not in ppid_of:
+            try:
+                with open(f"/proc/{pid}/stat", encoding="utf-8", errors="replace") as f:
+                    st = f.read()
+                ppid_of[pid] = int(st[st.rfind(")") + 2 :].split()[1])
+            except (OSError, ValueError, IndexError):
+                ppid_of[pid] = 0
+        return ppid_of[pid]
+
+    for p in procs:
+        if p["self_match"]:
+            p["protected"] = f"match:{p['self_match']}"
+            continue
+        p["protected"] = None
+        if not _matches(childp, (p["comm"], os.path.basename(p["exe"]), p["cmdline"])):
+            continue
+        cur, hops = p["ppid"], 0
+        while cur > 1 and hops < 64:
+            anc = by_pid.get(cur)
+            if anc is not None and anc.get("self_match"):
+                p["protected"] = f"child-of:{anc['name']}({cur})"
+                break
+            cur, hops = ppid(cur), hops + 1
 
 
 def iter_user_procs():
@@ -176,23 +279,30 @@ def iter_user_procs():
             # fields after comm: state(0), ppid(1), ... utime(11), stime(12), ... rss(21)
             if len(rest) < 22:
                 continue
+            ppid_v = int(rest[1])
             utime = int(rest[11])
             stime = int(rest[12])
             rss_pages = int(rest[21])
             rss = rss_pages * os.sysconf("SC_PAGESIZE")
-            exe_base = ""
             try:
                 exe = os.readlink(f"{base}/exe")
-                exe_base = os.path.basename(exe)
             except OSError:
-                exe_base = ""
-            if is_protected(pid, comm, exe_base):
+                exe = ""
+            exe_base = os.path.basename(exe)
+            if is_system_protected(pid, comm, exe_base):
                 continue
-            name = exe_base or comm
+            try:
+                with open(f"{base}/cmdline", "rb") as f:
+                    cmdline = f.read(8192).replace(b"\x00", b" ").decode("utf-8", errors="replace").strip()
+            except OSError:
+                cmdline = ""
             yield {
                 "pid": pid,
-                "name": name,
+                "ppid": ppid_v,
+                "name": exe_base or comm,
                 "comm": comm,
+                "exe": exe,
+                "cmdline": cmdline,
                 "jiffies": utime + stime,
                 "rss": rss,
             }
@@ -203,6 +313,9 @@ def iter_user_procs():
 def kill_process(proc: dict, reason: str, cpu: float | None, mem_ratio: float) -> None:
     pid = proc["pid"]
     name = proc["name"]
+    if proc.get("protected"):
+        log(f"refusing to kill protected pid={pid} name={name} ({proc['protected']})")
+        return
     rss_mb = proc["rss"] / (1024 * 1024)
     cpu_s = f"{cpu:.1f}%" if cpu is not None else "n/a"
     mem_s = f"{mem_ratio * 100:.1f}%"
@@ -236,7 +349,24 @@ def kill_process(proc: dict, reason: str, cpu: float | None, mem_ratio: float) -
         log(f"SIGKILL failed pid={pid}: {e}")
 
 
+_last_alert = {"t": 0.0}
+
+
+def alert_protected(proc: dict, reason: str, cpu: float | None, mem_ratio: float) -> None:
+    """Log every time (throttled per cooldown); notify at most every ALERT_COOLDOWN_SEC."""
+    now = time.monotonic()
+    rss_mb = proc["rss"] / (1024 * 1024)
+    cpu_s = f"{cpu:.1f}%" if cpu is not None else "n/a"
+    log(f"PROTECTED hog, not killing: pid={proc['pid']} name={proc['name']} reason={reason} "
+        f"cpu={cpu_s} rss_mb={rss_mb:.1f} sys_mem={mem_ratio * 100:.1f}% ({proc['protected']})")
+    if now - _last_alert["t"] >= ALERT_COOLDOWN_SEC:
+        _last_alert["t"] = now
+        notify("Resource watchdog — protected process hogging",
+               f"{proc['name']} (pid {proc['pid']}) {reason}\ncpu={cpu_s} rss={rss_mb:.0f}MiB — not killed")
+
+
 def main() -> int:
+    load_patterns()
     log(
         f"started uid={MY_UID} pid={MY_PID} dry_run={int(DRY_RUN)} "
         f"cpu>={CPU_THRESHOLD}% for {CPU_STREAK_NEEDED * POLL_SEC:.0f}s "
@@ -246,6 +376,7 @@ def main() -> int:
     cpu_state: dict[int, tuple[int, int]] = {}
     last_sample = time.monotonic()
     last_kill = 0.0
+    last_protected_log: dict[int, float] = {}
 
     while True:
         time.sleep(POLL_SEC)
@@ -255,6 +386,7 @@ def main() -> int:
 
         mem_ratio, _total = meminfo()
         procs = list(iter_user_procs())
+        classify(procs)
         seen = set()
 
         # Snapshot before the CPU loop mutates cpu_state, so the RAM scorer
@@ -279,6 +411,12 @@ def main() -> int:
                 streak = 0
             cpu_state[pid] = (jiffies, streak)
 
+            if streak >= CPU_STREAK_NEEDED and proc["protected"]:
+                if now - last_protected_log.get(pid, 0.0) >= COOLDOWN_SEC:
+                    last_protected_log[pid] = now
+                    alert_protected(proc, f"cpu>={CPU_THRESHOLD}%_for_{int(CPU_STREAK_NEEDED * POLL_SEC)}s",
+                                    cpu_pct, mem_ratio)
+                continue  # try the next (unprotected) offender
             if streak >= CPU_STREAK_NEEDED and (now - last_kill) >= COOLDOWN_SEC:
                 kill_process(proc, f"cpu>={CPU_THRESHOLD}%_for_{int(CPU_STREAK_NEEDED * POLL_SEC)}s",
                              cpu_pct, mem_ratio)
@@ -290,6 +428,9 @@ def main() -> int:
         for pid in list(cpu_state):
             if pid not in seen:
                 del cpu_state[pid]
+        for pid in list(last_protected_log):
+            if pid not in seen:
+                del last_protected_log[pid]
 
         # --- System RAM pressure: most-unused heavy process ---
         # Pick the process with the highest score = rss / (1 + recent_cpu_pct).
@@ -307,14 +448,25 @@ def main() -> int:
                     score = p["rss"] / (1.0 + cpu_pct)
                     scored.append((score, cpu_pct, p))
                 scored.sort(key=lambda t: t[0], reverse=True)
-                best_score, best_cpu, target = scored[0]
-                kill_process(
-                    target,
-                    f"sys_mem>{MEM_USED_THRESHOLD * 100:.0f}%_most_unused_heavy",
-                    best_cpu,
-                    mem_ratio,
-                )
-                last_kill = now
+                reason = f"sys_mem>{MEM_USED_THRESHOLD * 100:.0f}%_most_unused_heavy"
+                skipped = []
+                victim = None
+                for score, cpu_pct, p in scored:
+                    if p["protected"]:
+                        skipped.append((cpu_pct, p))
+                        continue
+                    if p["rss"] >= MEM_MIN_RSS:
+                        victim = (cpu_pct, p)
+                    break  # highest-ranked unprotected decides
+                for cpu_pct, p in skipped[:3]:
+                    log(f"skip protected top offender pid={p['pid']} name={p['name']} "
+                        f"rss_mb={p['rss'] / 1048576:.0f} ({p['protected']})")
+                if victim:
+                    kill_process(victim[1], reason, victim[0], mem_ratio)
+                elif skipped:
+                    alert_protected(skipped[0][1], reason + "_only_protected_hogging",
+                                    skipped[0][0], mem_ratio)
+                last_kill = now  # cooldown applies to alerts too
 
 
 if __name__ == "__main__":
