@@ -1,14 +1,21 @@
-# Extra directories appended to PATH (lowest priority) at the end of the rc
-# files. Rendered by ~/.chezmoitemplates/paths.tmpl into .bashrc/.zshrc.
+# PATH entries managed by chezmoi. Rendered by ~/.chezmoitemplates/paths.tmpl
+# into .bashrc/.zshrc.
 #
 # Sections:
-#   common — appended on every host
-#   local  — additionally appended when role = "local"
-#   remote — additionally appended when role = "remote"
+#   prepend — prepended to PATH (highest priority, checked first)
+#   common  — appended on every host (lowest priority)
+#   local   — additionally appended when role = "local"
+#   remote  — additionally appended when role = "remote"
 #
 # Edit, then run `chezmoi apply`.
 
 [paths]
+
+# Prepended to PATH (highest priority). Use sparingly.
+prepend = [
+  "/usr/bin"
+]
+
 # Appended on every host.
 common = []
 

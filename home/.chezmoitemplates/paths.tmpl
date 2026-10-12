@@ -1,8 +1,26 @@
-{{- /* Append chezmoidata/paths.toml dirs to PATH at the end (lowest priority).
+{{- /* Manage PATH via chezmoidata/paths.toml.
+       prepend — prepended to PATH (highest priority)
+       common/local/remote — appended to PATH (lowest priority)
        Expected context: root data dict (.role, .modules, .paths).
-       Emits a leading/trailing blank line only when paths are present.
 */ -}}
 {{- $paths := dig "paths" (dict) . -}}
+
+{{- /* Prepend entries (highest priority) */ -}}
+{{- $prefix := "" -}}
+{{- range $i, $d := dig "prepend" (list) $paths -}}
+{{-   if eq $i 0 -}}
+{{-     $prefix = $d -}}
+{{-   else -}}
+{{-     $prefix = printf "%s:%s" $prefix $d -}}
+{{-   end -}}
+{{- end -}}
+{{- if $prefix -}}
+{{- printf "\n\n" -}}
+# Prepended PATH entries (chezmoidata/paths.toml) — highest priority.
+export PATH="{{ $prefix }}:$PATH"
+{{- end -}}
+
+{{- /* Append entries (lowest priority) */ -}}
 {{- $suffix := "" -}}
 {{- range $d := dig "common" (list) $paths -}}
 {{-   $suffix = printf "%s:%s" $suffix $d -}}
