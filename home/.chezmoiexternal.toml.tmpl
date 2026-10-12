@@ -1,0 +1,19 @@
+{{- if and (dig "gui" false .) (dig "nautilus_extensions" false .modules) -}}
+# Pinned to a commit and checked by SHA-256, so the files that run inside
+# Nautilus cannot change without a reviewed edit here. To upgrade: pick a new
+# commit, download https://github.com/ToFpon/Nautilus-Extensions/archive/<commit>.tar.gz,
+# run `sha256sum` on it, and update both the URL and the checksum.
+[".local/share/nautilus-python/extensions"]
+type = "archive"
+url = "https://github.com/ToFpon/Nautilus-Extensions/archive/3613ecda5d4f4abf8fb9ad0457d1e63fa0c79fa9.tar.gz"
+stripComponents = 1
+checksum.sha256 = "601ae772aad362d5cd8aef63d46664fc60640d65b34a155f2d45192a0c87bdd9"
+include = [
+    "*/annotate-image.py",
+    "*/deb-installer.py",
+    "*/search-content.py",
+    "*/extract-here.py",
+    "*/compress-pdf.py",
+    "*/merge-pdf.py",
+]
+{{- end -}}
