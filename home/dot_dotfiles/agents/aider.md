@@ -4,7 +4,7 @@
 
 When documenting shell aliases or functions:
 
-1. Follow `docs/shell-documentation-standard.md`.
+1. Follow `home/dot_dotfiles/docs/shell-documentation-standard.md`.
 2. Do not modify runtime behavior unless explicitly requested.
 3. Do not rename, remove, or reorder commands.
 4. Preserve existing headings and organization.

@@ -13,15 +13,36 @@ DO NOT DELETE FILES WITHOUT MY AUTHORIZATION
 
 Chezmoi owns **dotfiles and config files**.
 
+PATH and environment variables are data-driven and owned by chezmoi:
+
+- `home/.chezmoidata/paths.toml` — PATH entries, rendered by `.chezmoitemplates/paths.tmpl`
+- `home/.chezmoidata/env.toml` — exported variables, written by `.chezmoiscripts/run_after_20-export-env.sh.tmpl`
+
+Add to them with `chezmoi_add_path` and `chezmoi_add_env` (in `dot_dotfiles/common/utils/`), not by hand-editing PATH logic.
+
 Do **not** add:
 
 - apt / package install scripts
 - `mise install` scripts
-- PATH rewriting
-- environment bootstrapping beyond tiny role defaults
+- PATH logic outside `paths.toml` / `paths.tmpl`
+- environment bootstrapping beyond those data files and tiny role defaults
 
-mise owns tools, PATH, and tool environment. The workstation provisioner owns
+mise owns tool installs (`conf.d/dotfiles.toml`). The workstation provisioner owns
 desktop app installs (VS Code, Cursor, Sublime, chezmoi binary, etc.).
+
+## Agent instruction files
+
+This file is the index. Tool-specific rules live beside the shell sources:
+
+- `home/dot_dotfiles/agents/aider.md` — shell documentation rules for aider
+- `home/dot_dotfiles/agents/cursor.md`
+- `home/dot_dotfiles/agents/openclaw.md`
+- `home/dot_dotfiles/docs/shell-documentation-standard.md` — the annotation format all of them follow
+
+## Checks
+
+Run `tests/check.sh` before committing. It renders every template, syntax-checks the scripts,
+and parses every `.chezmoidata` file.
 
 ### mise config split
 

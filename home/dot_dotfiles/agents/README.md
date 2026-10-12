@@ -26,5 +26,5 @@ See:
 - `agents/aider.md`
 - `agents/cursor.md`
 - `agents/openclaw.md`
-- `docs/shell-documentation-standard.md`
+- `home/dot_dotfiles/docs/shell-documentation-standard.md`
 ```

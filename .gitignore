@@ -13,5 +13,14 @@ mise.local.toml
 
 # Live secret dumps — never commit
 home/server_only/mcp-servers-export.json
-home/server_only/inventory..yml
+home/server_only/inventory.yml
 home/server_only/hermes.yaml
+
+# Secrets .env (template: home/dot_dotfiles/secrets.env.example) — never commit
+**/*.env
+!**/*.env.example
+**/dot_env
+**/private_dot_env
+**/secrets/.env
+**/dot_config/secrets/
+**/dot_config/private_secrets/

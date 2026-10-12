@@ -31,3 +31,8 @@
 {{- range $name, $val := $active }}
     {{ $name }} = {{ $val }}
 {{- end }}
+
+# Used by `chezmoi merge`. nvim is on every host this repo targets; vimdiff is not.
+[merge]
+    command = "nvim"
+    args = ["-d", "{{ "{{" }} .Destination {{ "}}" }}", "{{ "{{" }} .Source {{ "}}" }}", "{{ "{{" }} .Target {{ "}}" }}"]
