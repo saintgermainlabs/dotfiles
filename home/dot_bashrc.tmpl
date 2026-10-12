@@ -1,5 +1,11 @@
 # ~/.bashrc: executed by bash(1) for non-login shells.
 
+# Root of the chezmoi source state (the repo's home/ dir). Asked from chezmoi so
+# it follows the repo wherever it is installed; falls back to the default location.
+CHEZMOI_HOME="$(realpath "$(chezmoi source-path 2>/dev/null)" 2>/dev/null)" || CHEZMOI_HOME=""
+[ -n "${CHEZMOI_HOME}" ] || CHEZMOI_HOME="${HOME}/.local/share/chezmoi/home"
+export CHEZMOI_HOME
+
 case $- in
     *i*) ;;
       *) return;;
@@ -9,9 +15,26 @@ DF_DIR="${HOME}/.dotfiles"
 
 {{ template "source-common.tmpl" . }}
 
+
+# SSH with a visual indicator for remote environments
+ssh() {
+    # Set a visual indicator before connecting
+    printf '\033]11;#301515\007'
+
+    # Run SSH
+    command ssh "$@"
+    local status=$?
+
+    # Restore local background
+    printf '\033]11;#1e1e2e\007'
+
+    return "$status"
+}
+
 # Role extras
 {{- if eq .role "local" }}
 [ -r "${DF_DIR}/local/env" ] && . "${DF_DIR}/local/env"
+
 {{- else if eq .role "remote" }}
 [ -r "${DF_DIR}/remote/env" ] && . "${DF_DIR}/remote/env"
 {{- end }}
@@ -25,11 +48,16 @@ if [ -f ~/.bash_aliases ]; then
   . ~/.bash_aliases
 fi
 
-# Late init last among managed files: mise, zoxide, fzf, starship
+# PATH entries first, then late init (mise, zoxide, fzf, starship) so mise
+# activation re-prepends its pinned tools ahead of the paths.toml /usr/bin prepend.
 {{- if .modules.common }}
-[ -r "${DF_DIR}/common/init" ] && . "${DF_DIR}/common/init"
 {{- template "paths.tmpl" . }}
+[ -r "${DF_DIR}/common/init" ] && . "${DF_DIR}/common/init"
 {{- end }}
 
 # Machine-local, untracked overrides.
 [ -r ~/.bashrc.local ] && . ~/.bashrc.local
+
+source "${HOME}/.env"
+# Colored Alacritty windows for ssh and AI agents
+[ -f ~/.config/alacritty/terminal-roles.sh ] && . ~/.config/alacritty/terminal-roles.sh

@@ -1,0 +1,55 @@
+## @description Appends a shell function to a file in the chezmoi source, shows the diff, and optionally applies it.
+## @category Chezmoi
+## @arg $1 string The source-relative path of the target file, for example dot_dotfiles/common/functions.
+## @arg $2 string The complete function definition, as text.
+## @exitcode 0 If the function was appended (applied or left unapplied on request).
+## @exitcode 1 If the target is missing, the function already exists, or the write fails.
+## @exitcode 2 If the two arguments are not given.
+## @stderr Prints usage information or the reason for failure.
+## @example
+##   chezmoi_add_function dot_dotfiles/common/functions 'hello() { echo hi; }'
+## @see chezmoi diff(1)
+chezmoi_add_function() {
+  if [[ $# -lt 2 ]]; then
+    echo "Usage: chezmoi_add_function <source-relative-path> <function-definition>"
+    return 2
+  fi
+
+  local relative_path="$1"
+  local function_code="$2"
+  local source_dir target
+
+  source_dir="$(chezmoi source-path)" || return 1
+  target="$source_dir/$relative_path"
+
+  if [[ ! -f "$target" ]]; then
+    echo "Error: Source file not found: $target"
+    return 1
+  fi
+
+  # Prevent accidental duplicate function definitions.
+  local function_name
+  function_name="$(printf '%s\n' "$function_code" |
+    sed -nE 's/^[[:space:]]*([a-zA-Z_][a-zA-Z0-9_]*)[[:space:]]*\(\)[[:space:]]*\{.*/\1/p' |
+    head -n 1)"
+
+  if [[ -n "$function_name" ]] &&
+     grep -Eq "^[[:space:]]*${function_name}[[:space:]]*\\(\\)[[:space:]]*\\{" "$target"; then
+    echo "Error: Function '$function_name' already exists."
+    return 1
+  fi
+
+  printf '\n\n%s\n' "$function_code" >> "$target" || return 1
+
+  echo "Changes:"
+  chezmoi diff -- "$relative_path"
+
+  echo
+  read -r -p "Apply this change with chezmoi? [y/N] " answer
+  [[ "$answer" =~ ^[Yy]$ ]] || {
+    echo "Changes saved in the source repository but not applied."
+    return 0
+  }
+
+  chezmoi apply "$HOME/${relative_path#dot_}"
+}

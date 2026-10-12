@@ -1,0 +1,82 @@
+## @description Appends a directory to a section of the [paths] table in .chezmoidata/paths.toml (the file the PATH template reads).
+## @category Chezmoi
+## @arg --common|--local|--remote|--prepend Optional section. Defaults to --common (every host). --prepend puts the entry at the end of the prepend list, which is still the highest priority.
+## @arg $1 string The directory to add. A path under $HOME is stored as $HOME/... so it works on every host.
+## @exitcode 0 If the entry was added.
+## @exitcode 1 If the entry already exists, the section is missing, or the file cannot be found or written.
+## @exitcode 2 If the argument is missing or invalid.
+## @stderr Prints usage information or the reason for failure.
+## @example
+##   chezmoi_add_path '$HOME/.local/bin'
+##   chezmoi_add_path --local "/opt/some-tool/bin"
+## @see chezmoi source-path(1)
+chezmoi_add_path() {
+  local section="common"
+  case "${1:-}" in
+    --prepend) section="prepend"; shift ;;
+    --common)  section="common";  shift ;;
+    --local)   section="local";   shift ;;
+    --remote)  section="remote";  shift ;;
+  esac
+
+  if [ "$#" -ne 1 ] || [ -z "$1" ]; then
+    printf 'Usage: chezmoi_add_path [--common|--local|--remote|--prepend] "DIRECTORY"\n' >&2
+    return 2
+  fi
+
+  local entry="$1"
+  # Store paths under $HOME as $HOME/... so the entry works on every host.
+  case "$entry" in
+    "$HOME"/*) entry="\$HOME/${entry#"$HOME"/}" ;;
+  esac
+  local source_dir file
+  source_dir="$(chezmoi source-path)" || return 1
+  file="${source_dir}/.chezmoidata/paths.toml"
+  if [ ! -w "$file" ]; then
+    printf 'Error: cannot write %s\n' "$file" >&2
+    return 1
+  fi
+
+  # Edits only the requested array. The result is parsed as TOML before it
+  # replaces the file, so a bad edit cannot break the file.
+  python3 - "$file" "$section" "$entry" <<'PY'
+import os, re, sys, tempfile, tomllib
+
+path, section, entry = sys.argv[1:4]
+text = open(path, encoding="utf-8").read()
+
+header = re.search(r"^%s[ \t]*=[ \t]*\[" % re.escape(section), text, re.M)
+if header is None:
+    sys.exit(f"Error: section '{section}' not found in {path}")
+close = text.find("]", header.end())
+if close < 0:
+    sys.exit(f"Error: unterminated '{section}' array in {path}")
+
+body = text[header.end():close]
+if "#" in body:
+    sys.exit(f"Error: comments inside '{section}' - add the entry by hand")
+
+# Existing entries are TOML basic strings; compare them in escaped form.
+items = re.findall(r'"((?:[^"\\]|\\.)*)"', body)
+escaped = entry.replace("\\", "\\\\").replace('"', '\\"')
+if escaped in items:
+    sys.exit(f"Error: {entry} is already in '{section}'")
+items.append(escaped)
+
+array = "[\n" + ",\n".join(f'  "{item}"' for item in items) + "\n]"
+new_text = text[:header.start()] + f"{section} = {array}" + text[close + 1:]
+
+# Check the result before writing it.
+parsed = tomllib.loads(new_text)
+if parsed["paths"][section][-1] != entry:
+    sys.exit("Error: edit did not produce the expected entry; file left unchanged")
+
+directory = os.path.dirname(path)
+fd, tmp = tempfile.mkstemp(dir=directory, prefix=".paths.", suffix=".toml")
+with os.fdopen(fd, "w", encoding="utf-8") as f:
+    f.write(new_text)
+os.chmod(tmp, os.stat(path).st_mode & 0o777)  # mkstemp creates 0600; keep the original mode
+os.replace(tmp, path)
+print(f"Added {entry} to [{section}] in {path}")
+PY
+}

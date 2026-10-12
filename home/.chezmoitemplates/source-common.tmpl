@@ -7,4 +7,11 @@ for _df in shell aliases functions prompt help completions.bash completions.zsh;
   . "${DF_DIR}/common/${_df}"
 done
 unset _df
+# utils: every file in common/utils (chezmoi helpers such as chezmoi_add_env)
+for _df in "${DF_DIR}"/common/utils/*; do
+  [ -r "${_df}" ] || continue
+  # shellcheck disable=SC1090
+  . "${_df}"
+done
+unset _df
 {{- end }}

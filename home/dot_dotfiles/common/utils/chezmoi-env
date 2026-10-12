@@ -1,0 +1,55 @@
+## @description Appends a variable to the [env] table in .chezmoidata/env.toml (the file the export-env script reads).
+## @category Chezmoi
+## @arg $1 string The variable as NAME=VALUE. NAME must be a valid shell name and must not already be in the file.
+## @exitcode 0 If the variable was appended.
+## @exitcode 1 If the variable already exists or the file cannot be found or written.
+## @exitcode 2 If the argument is missing or not in NAME=VALUE form.
+## @stderr Prints usage information or the reason for failure.
+## @example
+##   chezmoi_add_env "EDITOR=nvim"
+##   chezmoi_add_env "MY_PROJECTS=/home/me/projects"
+## @see chezmoi source-path(1)
+chezmoi_add_env() {
+  if [ "$#" -ne 1 ] || [ "${1#*=}" = "$1" ]; then
+    printf 'Usage: chezmoi_add_env "NAME=VALUE"\n' >&2
+    return 2
+  fi
+
+  local name="${1%%=*}"
+  local value="${1#*=}"
+  if ! printf '%s\n' "$name" | grep -Eq '^[A-Za-z_][A-Za-z0-9_]*$'; then
+    printf 'Error: invalid variable name: %s\n' "$name" >&2
+    return 2
+  fi
+
+  # Set by .bashrc and .zshrc from chezmoi itself; keep a single definition.
+  if [ "$name" = "CHEZMOI_HOME" ]; then
+    printf 'Error: CHEZMOI_HOME is set by .bashrc and .zshrc; do not add it here\n' >&2
+    return 1
+  fi
+
+  local source_dir file
+  source_dir="$(chezmoi source-path)" || return 1
+  file="${source_dir}/.chezmoidata/env.toml"
+  if [ ! -w "$file" ]; then
+    printf 'Error: cannot write %s\n' "$file" >&2
+    return 1
+  fi
+
+  if grep -Eq "^[[:space:]]*${name}[[:space:]]*=" "$file"; then
+    printf 'Error: %s is already defined in %s\n' "$name" "$file" >&2
+    return 1
+  fi
+
+  # TOML basic strings: backslashes and double quotes must be escaped.
+  local escaped="$value"
+  escaped="${escaped//\\/\\\\}"
+  escaped="${escaped//\"/\\\"}"
+
+  # Make sure the new line starts on its own line.
+  if [ -s "$file" ] && [ -n "$(tail -c 1 "$file")" ]; then
+    printf '\n' >> "$file"
+  fi
+  printf '%s = "%s"\n' "$name" "$escaped" >> "$file"
+  printf 'Added %s to %s\n' "$name" "$file"
+}
