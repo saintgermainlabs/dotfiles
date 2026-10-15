@@ -1,0 +1,543 @@
+#!/usr/bin/env python3
+"""termbanner - Claude-Code-style terminal header banners, themes and pinned headers.
+
+Stdlib only (uses PyYAML if available, else a small built-in YAML subset parser).
+"""
+import argparse, json, os, re, shutil, signal, socket, subprocess, sys, time, unicodedata
+
+VERSION = "0.1.0"
+CONFIG_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "termbanner")
+STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "termbanner")
+PRESETS_FILE = os.path.join(CONFIG_DIR, "presets.yaml")
+PROJECTS_FILE = os.path.join(STATE_DIR, "projects.json")
+ESC = "\x1b"
+ST = "\x1b\\"
+
+# ---------------------------------------------------------------- built-in presets
+BUILTIN_PRESETS = {
+    "claude": {
+        "title": "CLAUDE", "subtitle": "Claude Code", "emblem": "claude",
+        "gradient": ["#f0a27a", "#d97757", "#b6532f"], "border": "#d97757",
+        "text": "#e8dccb", "dim": "#9c8f7d",
+        "window_title": "Claude · {project}",
+        "theme": {
+            "background": "#1f1b16", "foreground": "#e8dccb", "cursor": "#d97757",
+            "palette": ["#2a251f", "#e0684b", "#9fbf7a", "#e3b26a", "#7fa3c7", "#c58fb3", "#7fbfb5", "#d6c9b6",
+                        "#5a5046", "#f08566", "#b8d494", "#f0c987", "#9bbbdc", "#d9a8c9", "#9ad3ca", "#f4ebdd"],
+        },
+        "alacritty": {"window.padding.x": 12, "window.padding.y": 8, "window.opacity": 0.97},
+    },
+}
+
+# ---------------------------------------------------------------- tiny YAML subset
+def _scalar(s):
+    s = s.strip()
+    if not s: return None
+    if s[0] in "\"'" and s[-1] == s[0]:
+        return _unesc(s[1:-1]) if s[0] == '"' else s[1:-1]
+    if s.startswith("[") and s.endswith("]"):
+        inner = s[1:-1].strip()
+        return [_scalar(x) for x in re.findall(r'"[^"]*"|\'[^\']*\'|[^,]+', inner)] if inner else []
+    low = s.lower()
+    if low in ("true", "yes", "on"): return True
+    if low in ("false", "no", "off"): return False
+    if low in ("null", "~"): return None
+    try: return int(s)
+    except ValueError: pass
+    try: return float(s)
+    except ValueError: return s
+
+def _unesc(s):
+    m = {"n": "\n", "t": "\t", '"': '"', "\\": "\\", "e": "\x1b"}
+    return re.sub(r'\\(u[0-9a-fA-F]{4}|.)', lambda g: chr(int(g.group(1)[1:], 16)) if g.group(1)[0] == "u" and len(g.group(1)) == 5 else m.get(g.group(1), g.group(0)), s)
+
+def _strip_comment(line):
+    out, q = [], None
+    for i, ch in enumerate(line):
+        if q:
+            if ch == q: q = None
+        elif ch in "\"'": q = ch
+        elif ch == "#" and (i == 0 or line[i - 1] in " \t"): break
+        out.append(ch)
+    return "".join(out).rstrip()
+
+def mini_yaml(text):
+    lines = []
+    for raw in text.splitlines():
+        l = _strip_comment(raw)
+        if l.strip() and l.strip() != "---":
+            lines.append((len(l) - len(l.lstrip(" ")), l.strip()))
+    pos = 0
+    def block(indent):
+        nonlocal pos
+        if pos >= len(lines): return None
+        if lines[pos][1].startswith("- "):
+            res = []
+            while pos < len(lines) and lines[pos][0] == indent and lines[pos][1].startswith("- "):
+                res.append(_scalar(lines[pos][1][2:])); pos += 1
+            return res
+        res = {}
+        while pos < len(lines) and lines[pos][0] == indent:
+            k, _, v = lines[pos][1].partition(":")
+            k = _scalar(k); pos += 1
+            if v.strip():
+                res[k] = _scalar(v)
+            elif pos < len(lines) and lines[pos][0] > indent:
+                res[k] = block(lines[pos][0])
+            elif pos < len(lines) and lines[pos][0] == indent and lines[pos][1].startswith("- "):
+                res[k] = block(indent)
+            else:
+                res[k] = None
+        return res
+    return block(lines[0][0]) if lines else {}
+
+def load_yaml(path):
+    with open(path, encoding="utf-8") as f: text = f.read()
+    try:
+        import yaml  # type: ignore
+        return yaml.safe_load(text) or {}
+    except ImportError:
+        return mini_yaml(text) or {}
+
+def load_presets():
+    presets = dict(BUILTIN_PRESETS)
+    if os.path.exists(PRESETS_FILE):
+        try:
+            data = load_yaml(PRESETS_FILE)
+            presets.update((data or {}).get("presets", data) or {})
+        except Exception as e:
+            print(f"termbanner: cannot parse {PRESETS_FILE}: {e}", file=sys.stderr)
+    return presets
+
+# ---------------------------------------------------------------- color support
+def color_mode():
+    if os.environ.get("NO_COLOR"): return "none"
+    forced = os.environ.get("TERMBANNER_COLOR")
+    if forced: return forced
+    term = os.environ.get("TERM", "")
+    if term in ("dumb", ""): return "none" if term == "dumb" else "16"
+    ct = os.environ.get("COLORTERM", "").lower()
+    if ct in ("truecolor", "24bit") or any(t in term for t in ("alacritty", "kitty", "direct", "wezterm", "foot")) \
+            or os.environ.get("VTE_VERSION") or os.environ.get("KITTY_WINDOW_ID") or os.environ.get("ALACRITTY_WINDOW_ID"):
+        return "truecolor"
+    if "256" in term: return "256"
+    if term == "linux": return "16"
+    return "256"
+
+def hex2rgb(h):
+    h = h.lstrip("#")
+    if len(h) == 3: h = "".join(c * 2 for c in h)
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+def rgb_to_256(r, g, b):
+    if abs(r - g) < 10 and abs(g - b) < 10:
+        if r < 8: return 16
+        if r > 238: return 231
+        return 232 + round((r - 8) / 247 * 24)
+    q = lambda v: 0 if v < 48 else 1 if v < 115 else (v - 35) // 40
+    return 16 + 36 * q(r) + 6 * q(g) + q(b)
+
+_ANSI16 = [(0,0,0),(205,0,0),(0,205,0),(205,205,0),(0,0,238),(205,0,205),(0,205,205),(229,229,229),
+           (127,127,127),(255,0,0),(0,255,0),(255,255,0),(92,92,255),(255,0,255),(0,255,255),(255,255,255)]
+def rgb_to_16(r, g, b):
+    i = min(range(16), key=lambda k: sum((a - c) ** 2 for a, c in zip((r, g, b), _ANSI16[k])))
+    return 30 + i if i < 8 else 90 + i - 8
+
+class Painter:
+    def __init__(self, mode): self.mode = mode
+    def fg(self, rgb):
+        if self.mode == "none" or rgb is None: return ""
+        r, g, b = rgb
+        if self.mode == "truecolor": return f"{ESC}[38;2;{r};{g};{b}m"
+        if self.mode == "256": return f"{ESC}[38;5;{rgb_to_256(r, g, b)}m"
+        return f"{ESC}[{rgb_to_16(r, g, b)}m"
+    def sgr(self, code): return "" if self.mode == "none" else f"{ESC}[{code}m"
+    @property
+    def reset(self): return "" if self.mode == "none" else f"{ESC}[0m"
+
+def lerp_stops(stops, t):
+    if len(stops) == 1: return stops[0]
+    t = max(0.0, min(1.0, t)) * (len(stops) - 1)
+    i = min(int(t), len(stops) - 2); f = t - i
+    a, b = stops[i], stops[i + 1]
+    return tuple(round(a[k] + (b[k] - a[k]) * f) for k in range(3))
+
+# ---------------------------------------------------------------- width helpers
+ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)")
+def cwidth(ch):
+    if unicodedata.combining(ch) or ch in "\u200d\ufe0f\ufe0e": return 0
+    if unicodedata.east_asian_width(ch) in "WF": return 2
+    if 0x1F300 <= ord(ch) <= 0x1FAFF: return 2
+    return 1
+def swidth(s): return sum(cwidth(c) for c in ANSI_RE.sub("", s))
+def truncate(s, w):
+    out, n = [], 0
+    for c in s:
+        cw = cwidth(c)
+        if n + cw > w: return "".join(out[:-1]) + "…" if out else ""
+        out.append(c); n += cw
+    return "".join(out)
+
+# ---------------------------------------------------------------- big font
+_FONT = {
+ "A":" ### |#   #|#####|#   #|#   #", "B":"#### |#   #|#### |#   #|#### ", "C":" ####|#    |#    |#    | ####",
+ "D":"#### |#   #|#   #|#   #|#### ", "E":"#####|#    |#### |#    |#####", "F":"#####|#    |#### |#    |#    ",
+ "G":" ####|#    |#  ##|#   #| ####", "H":"#   #|#   #|#####|#   #|#   #", "I":"###| # | # | # |###",
+ "J":"  ###|   # |   # |#  # | ##  ", "K":"#   #|#  # |###  |#  # |#   #", "L":"#    |#    |#    |#    |#####",
+ "M":"#   #|## ##|# # #|#   #|#   #", "N":"#   #|##  #|# # #|#  ##|#   #", "O":" ### |#   #|#   #|#   #| ### ",
+ "P":"#### |#   #|#### |#    |#    ", "Q":" ### |#   #|# # #|#  # | ## #", "R":"#### |#   #|#### |#  # |#   #",
+ "S":" ####|#    | ### |    #|#### ", "T":"#####|  #  |  #  |  #  |  #  ", "U":"#   #|#   #|#   #|#   #| ### ",
+ "V":"#   #|#   #|#   #| # # |  #  ", "W":"#   #|#   #|# # #|## ##|#   #", "X":"#   #| # # |  #  | # # |#   #",
+ "Y":"#   #| # # |  #  |  #  |  #  ", "Z":"#####|   # |  #  | #   |#####", "0":" ### |#  ##|# # #|##  #| ### ",
+ "1":" # |## | # | # |###", "2":"#### |    #| ### |#    |#####", "3":"#### |    #| ### |    #|#### ",
+ "4":"#   #|#   #|#####|    #|    #", "5":"#####|#    |#### |    #|#### ", "6":" ### |#    |#### |#   #| ### ",
+ "7":"#####|    #|   # |  #  |  #  ", "8":" ### |#   #| ### |#   #| ### ", "9":" ### |#   #| ####|    #| ### ",
+ " ":"  |  |  |  |  ", "-":"   |   |###|   |   ", ".":" | | | |#", "_":"    |    |    |    |####", "!":"#|#|#| |#",
+ ":":" |#| |#| ", "/":"    #|   # |  #  | #   |#    ", "+":"     |  #  |#####|  #  |     ", "?":"#### |    #|  ## |     |  #  ",
+}
+def builtin_big(text):
+    rows = [""] * 5
+    for ch in text.upper():
+        g = _FONT.get(ch, _FONT["?"]).split("|")
+        for i in range(5): rows[i] += g[i].replace("#", "█") + " "
+    return [r.rstrip() for r in rows]
+
+def big_text(text, font=None, engine="auto"):
+    if engine in ("auto", "figlet") and shutil.which("figlet"):
+        cmd = ["figlet", "-w", "500"] + (["-f", font] if font else [])
+    elif engine in ("auto", "toilet") and shutil.which("toilet"):
+        cmd = ["toilet", "-w", "500"] + (["-f", font] if font else [])
+    else:
+        cmd = None
+    if cmd and engine != "builtin":
+        try:
+            out = subprocess.run(cmd + [text], capture_output=True, text=True, timeout=5).stdout
+            lines = out.rstrip("\n").split("\n")
+            while lines and not lines[-1].strip(): lines.pop()
+            if lines: return lines
+        except Exception: pass
+    return builtin_big(text)
+
+EMBLEMS = {
+    "claude": ["  ╲ │ ╱  ", "   ╲│╱   ", " ───✻─── ", "   ╱│╲   ", "  ╱ │ ╲  "],
+    "danger": ["   ▲   ", "  ╱ ╲  ", " ╱ ! ╲ ", "╱_____╲", "       "],
+    "leaf":   ["   ▄▄  ", " ▄█▀▀█ ", " █▄▄█▀ ", " █▀    ", "▀      "],
+    "dot":    ["●"],
+    "none":   [],
+}
+
+# ---------------------------------------------------------------- info
+def git_branch(path):
+    try:
+        r = subprocess.run(["git", "-C", path, "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True, timeout=2)
+        return r.stdout.strip() if r.returncode == 0 else None
+    except Exception: return None
+
+def load_projects():
+    try:
+        with open(PROJECTS_FILE) as f: return json.load(f)
+    except Exception: return {}
+
+def find_project(path):
+    data = load_projects(); p = os.path.abspath(path)
+    while True:
+        if p in data: return data[p]
+        parent = os.path.dirname(p)
+        if parent == p: return data.get("_global")
+        p = parent
+
+def save_project(path, name):
+    data = load_projects()
+    if name is None: data.pop(path, None)
+    else: data[path] = name
+    os.makedirs(STATE_DIR, exist_ok=True)
+    tmp = PROJECTS_FILE + ".tmp"
+    with open(tmp, "w") as f: json.dump(data, f, indent=2)
+    os.replace(tmp, PROJECTS_FILE)
+
+def fmt(s, ctx):
+    try: return s.format(**ctx)
+    except Exception: return s
+
+# ---------------------------------------------------------------- rendering
+def render(cfg, cols, mode, cwd):
+    P = Painter(mode)
+    stops = [hex2rgb(c) for c in cfg.get("gradient") or ["#ffffff"]]
+    border = hex2rgb(cfg["border"]) if cfg.get("border") else stops[0]
+    text_c = hex2rgb(cfg.get("text", "#e0e0e0")); dim_c = hex2rgb(cfg.get("dim", "#8a8a8a"))
+    home = os.path.expanduser("~")
+    short = "~" + cwd[len(home):] if cwd.startswith(home) else cwd
+    project = cfg.get("project") or ""
+    ctx = {"cwd": short, "host": socket.gethostname(), "user": os.environ.get("USER", ""),
+           "branch": git_branch(cwd) or "", "project": project or os.path.basename(cwd) or "/",
+           "shell": os.path.basename(os.environ.get("SHELL", "sh")), "time": time.strftime("%H:%M")}
+    inner_max = max(10, cols - 4)
+
+    title = fmt(cfg.get("title") or "", ctx)
+    big = big_text(title, cfg.get("font"), cfg.get("engine", "auto")) if title and cfg.get("big", True) else []
+    em = cfg.get("emblem")
+    em_lines = EMBLEMS.get(em, None) if isinstance(em, str) else em
+    if em_lines is None: em_lines = [em] if em else []
+    emw = max((swidth(l) for l in em_lines), default=0)
+    gap = 2 if emw else 0
+    bigw = max((swidth(l) for l in big), default=0)
+    if big and emw + gap + bigw > inner_max:   # too wide: drop emblem, then fall back to plain title
+        em_lines, emw, gap = [], 0, 0
+        if bigw > inner_max: big = []
+
+    rows = []  # list of (plain_width, rendered_string)
+    def grad_line(s, width):
+        if mode == "none": return s
+        out = []
+        for i, ch in enumerate(s):
+            out.append(ch if ch == " " else P.fg(lerp_stops(stops, i / max(1, width - 1))) + ch)
+        return P.sgr(1) + "".join(out) + P.reset
+    h = max(len(big), len(em_lines))
+    if big:
+        etop = (h - len(em_lines)) // 2; btop = (h - len(big)) // 2
+        for i in range(h):
+            e = em_lines[i - etop] if 0 <= i - etop < len(em_lines) else ""
+            b = big[i - btop] if 0 <= i - btop < len(big) else ""
+            e_r = P.fg(stops[0]) + e + " " * (emw - swidth(e)) + P.reset
+            b = b + " " * (bigw - swidth(b))
+            rows.append((emw + gap + bigw, e_r + " " * gap + grad_line(b, bigw)))
+    elif title:
+        prefix = (em_lines[len(em_lines) // 2] + " ") if em_lines else ""
+        t = truncate(prefix + title, inner_max)
+        rows.append((swidth(t), grad_line(t, swidth(t))))
+    if project and project != title:
+        t = truncate(cfg.get("project_format", "▸ {project}").format(project=project), inner_max)
+        rows.append((swidth(t), P.sgr(1) + P.fg(stops[min(1, len(stops) - 1)]) + t + P.reset))
+    for key, col, style in (("subtitle", text_c, 1), ("info", dim_c, 2)):
+        val = cfg.get(key)
+        if key == "info" and val is None: val = "{cwd}  ·  {user}@{host}" + ("  ·  ⎇ {branch}" if ctx["branch"] else "")
+        for line in ([val] if isinstance(val, str) else (val or [])):
+            line = fmt(line, ctx)
+            if not ctx["branch"]: line = re.sub(r"\s*·?\s*⎇\s*$", "", line)
+            t = truncate(line, inner_max)
+            rows.append((swidth(t), P.fg(col) + (P.sgr(style) if style == 1 and key == "subtitle" else "") + t + P.reset))
+    width = min(inner_max, max((w for w, _ in rows), default=0))
+    if cfg.get("full_width"): width = inner_max
+    bc = P.fg(border); R = P.reset
+    style = cfg.get("box", "rounded")
+    tl, tr, bl, br, hz, vt = {"rounded": "╭╮╰╯─│", "square": "┌┐└┘─│", "heavy": "┏┓┗┛━┃", "double": "╔╗╚╝═║",
+                              "ascii": "++++-|", "none": "      "}.get(style, "╭╮╰╯─│")
+    label = cfg.get("label")
+    top = hz * (width + 2)
+    if label:
+        lab = f" {truncate(fmt(label, ctx), width - 2)} "
+        top = hz + lab + hz * (width + 1 - swidth(lab))
+    out = [bc + tl + top + tr + R]
+    for w, s in rows:
+        out.append(bc + vt + R + " " + s + " " * (width - w) + " " + bc + vt + R)
+    out.append(bc + bl + hz * (width + 2) + br + R)
+    return out, ctx
+
+# ---------------------------------------------------------------- terminal control
+def tty_out():
+    try: return open("/dev/tty", "w")
+    except OSError: return sys.stdout
+
+def osc(code, val): return f"{ESC}]{code};{val}{ST}"
+
+def theme_seq(theme):
+    s = []
+    if not theme: return ""
+    for i, c in enumerate(theme.get("palette") or []): s.append(osc(4, f"{i};{c}"))
+    if theme.get("foreground"): s.append(osc(10, theme["foreground"]))
+    if theme.get("background"): s.append(osc(11, theme["background"]))
+    if theme.get("cursor"): s.append(osc(12, theme["cursor"]))
+    return "".join(s)
+
+RESET_SEQ = f"{ESC}]104{ST}{ESC}]110{ST}{ESC}]111{ST}{ESC}]112{ST}{ESC}[r"
+
+def alacritty_apply(settings, reset=False):
+    if not os.environ.get("ALACRITTY_SOCKET") or not shutil.which("alacritty"):
+        print("termbanner: --alacritty needs ALACRITTY_SOCKET (run inside Alacritty)", file=sys.stderr); return False
+    wid = os.environ.get("ALACRITTY_WINDOW_ID")
+    cmd = ["alacritty", "msg", "config"] + (["-w", wid] if wid else [])
+    if reset: cmd += ["-r"]
+    else: cmd += [f"{k}={json.dumps(v) if isinstance(v, str) else v}" for k, v in settings.items()]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0: print(f"termbanner: alacritty msg failed: {r.stderr.strip()}", file=sys.stderr)
+    return r.returncode == 0
+
+def alacritty_theme_toml(name, theme):
+    names = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
+    pal = theme.get("palette") or []
+    out = [f"# termbanner preset '{name}' as an Alacritty theme", "[colors.primary]",
+           f"background = '{theme.get('background')}'", f"foreground = '{theme.get('foreground')}'"]
+    if theme.get("cursor"): out += ["", "[colors.cursor]", f"cursor = '{theme['cursor']}'", f"text = '{theme.get('background')}'"]
+    for sect, off in (("normal", 0), ("bright", 8)):
+        if len(pal) >= off + 8:
+            out += ["", f"[colors.{sect}]"] + [f"{n} = '{pal[off + i]}'" for i, n in enumerate(names)]
+    return "\n".join(out) + "\n"
+
+def term_size(f):
+    try: c, r = os.get_terminal_size(f.fileno())
+    except OSError: c = r = 0
+    return os.terminal_size((c or int(os.environ.get("COLUMNS", 80)), r or int(os.environ.get("LINES", 24))))
+
+# ---------------------------------------------------------------- pin mode
+def run_pinned(cfg, mode, cmd, theme_s, title_s, child_env):
+    out = tty_out()
+    state = {"child": None, "dirty": False, "h": 0}
+    def child_cwd():
+        try: return os.readlink(f"/proc/{state['child']}/cwd")
+        except Exception: return os.getcwd()
+    def draw(initial=False):
+        cols, rows = term_size(out)
+        cwd = child_cwd()
+        c = dict(cfg); c["project"] = cfg.get("project") or find_project(cwd)
+        lines, ctx = render(c, cols, mode, cwd)
+        lines = lines[: max(1, rows - 3)]
+        h = len(lines); state["h"] = h
+        buf = [] if initial else [ESC + "7"]
+        if initial: buf.append(f"{ESC}[H{ESC}[2J")
+        buf.append(f"{ESC}[{h + 1};{rows}r")       # scroll region below banner (homes cursor)
+        for i, l in enumerate(lines): buf.append(f"{ESC}[{i + 1};1H{ESC}[2K{l}")
+        if title_s or cfg.get("window_title"): buf.append(osc(0, fmt(cfg.get("window_title") or "", ctx)))
+        buf.append(f"{ESC}[{h + 1};1H" if initial else ESC + "8")
+        out.write("".join(buf)); out.flush()
+    def on_sig(signum, frame): state["dirty"] = True
+    if theme_s: out.write(theme_s)
+    draw(initial=True)
+    env = dict(child_env); env["TERMBANNER_PID"] = str(os.getpid()); env["TERMBANNER_PINNED"] = "1"
+    hook = 'kill -USR1 "$TERMBANNER_PID" 2>/dev/null'
+    env["PROMPT_COMMAND"] = hook + (";" + env["PROMPT_COMMAND"] if env.get("PROMPT_COMMAND") else "")
+    pid = os.fork()
+    if pid == 0:
+        for s in (signal.SIGINT, signal.SIGQUIT, signal.SIGTSTP, signal.SIGTTOU): signal.signal(s, signal.SIG_DFL)
+        try: os.execvpe(cmd[0], cmd, env)
+        except OSError as e:
+            print(f"termbanner: cannot exec {cmd[0]}: {e}", file=sys.stderr); os._exit(127)
+    state["child"] = pid
+    for s in (signal.SIGINT, signal.SIGQUIT, signal.SIGTSTP, signal.SIGTTOU): signal.signal(s, signal.SIG_IGN)
+    signal.signal(signal.SIGWINCH, on_sig); signal.signal(signal.SIGUSR1, on_sig)
+    status = 0
+    try:
+        while True:
+            try:
+                wpid, st = os.waitpid(pid, 0)
+                status = os.waitstatus_to_exitcode(st); break
+            except InterruptedError: pass
+            except ChildProcessError: break
+            finally:
+                if state["dirty"]:
+                    state["dirty"] = False
+                    try: draw()
+                    except Exception: pass
+    finally:
+        cols, rows = term_size(out)
+        out.write(f"{ESC}[r{ESC}[{rows};1H"); out.flush()
+        if cfg.get("reset_on_exit"): out.write(RESET_SEQ); out.flush()
+    return status if status >= 0 else 128 - status
+
+# ---------------------------------------------------------------- main
+def build_parser():
+    p = argparse.ArgumentParser(prog="termbanner", description="Claude-Code-style terminal banners, themes and pinned headers.",
+        epilog="subcommands: termbanner project NAME | project --clear | project (show) | presets | alacritty-theme PRESET | hook bash")
+    p.add_argument("--preset", "-p", default=os.environ.get("TERMBANNER_PRESET", "claude"))
+    p.add_argument("--title", "-t"); p.add_argument("--subtitle", "-s"); p.add_argument("--emblem", "-e")
+    p.add_argument("--project", help="project line (default: from `termbanner project`)")
+    p.add_argument("--info", action="append", help="info line (format keys: {cwd} {host} {user} {branch} {project} {shell} {time})")
+    p.add_argument("--color", "--theme-color", dest="color", help="gradient: '#hex' or '#a,#b,#c'")
+    p.add_argument("--font", help="figlet/toilet font"); p.add_argument("--engine", choices=["auto", "figlet", "toilet", "builtin"])
+    p.add_argument("--small", action="store_true", help="no big font, single-line title")
+    p.add_argument("--box", choices=["rounded", "square", "heavy", "double", "ascii", "none"])
+    p.add_argument("--full-width", action="store_true")
+    p.add_argument("--bg"); p.add_argument("--fg"); p.add_argument("--cursor")
+    p.add_argument("--theme", dest="apply_theme", action="store_true", default=None, help="apply preset palette (OSC 4/10/11/12)")
+    p.add_argument("--no-theme", dest="apply_theme", action="store_false")
+    p.add_argument("--window-title", "--wt", dest="window_title")
+    p.add_argument("--pin", action="store_true", help="pin banner via DECSTBM scroll region, then run $SHELL or CMD")
+    p.add_argument("--alacritty", action="store_true", help="apply preset 'alacritty:' settings live via `alacritty msg config`")
+    p.add_argument("--reset", action="store_true", help="restore palette/fg/bg/cursor, title and scroll region")
+    p.add_argument("--reset-on-exit", action="store_true")
+    p.add_argument("--color-mode", choices=["truecolor", "256", "16", "none"])
+    p.add_argument("--no-clear", action="store_true"); p.add_argument("--clear", action="store_true")
+    p.add_argument("--version", action="version", version=VERSION)
+    return p
+
+def subcommand(argv):
+    cmd = argv[0]
+    if cmd == "project":
+        rest = argv[1:]; glob = "--global" in rest; rest = [a for a in rest if a != "--global"]
+        key = "_global" if glob else os.path.abspath(os.getcwd())
+        if not rest: print(find_project(os.getcwd()) or "(no project set)"); return 0
+        save_project(key, None if rest[0] == "--clear" else " ".join(rest))
+        pid = os.environ.get("TERMBANNER_PID")
+        if pid:
+            try: os.kill(int(pid), signal.SIGUSR1)
+            except Exception: pass
+        else:
+            print("termbanner: saved (pinned banners redraw automatically; run `termbanner` to show)", file=sys.stderr)
+        return 0
+    if cmd == "presets":
+        for n, c in load_presets().items(): print(f"{n:12} {c.get('description', c.get('subtitle', ''))}")
+        return 0
+    if cmd == "alacritty-theme":
+        name = argv[1] if len(argv) > 1 else "claude"
+        pr = load_presets().get(name) or {}
+        if not pr.get("theme"): print(f"preset {name} has no theme", file=sys.stderr); return 1
+        sys.stdout.write(alacritty_theme_toml(name, pr["theme"])); return 0
+    if cmd == "hook":
+        print('# eval "$(termbanner hook bash)"  -- redraw a pinned banner on every prompt\n'
+              'if [ -n "$TERMBANNER_PID" ]; then PROMPT_COMMAND=\'kill -USR1 "$TERMBANNER_PID" 2>/dev/null\'"${PROMPT_COMMAND:+;$PROMPT_COMMAND}"; fi')
+        return 0
+    return None
+
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] in ("project", "presets", "alacritty-theme", "hook"):
+        return subcommand(argv)
+    cmd = []
+    if "--" in argv:
+        i = argv.index("--"); cmd = argv[i + 1:]; argv = argv[:i]
+    a = build_parser().parse_args(argv)
+    out = tty_out() if (a.pin or a.reset) else sys.stdout
+    if a.reset:
+        out.write(RESET_SEQ + osc(0, os.path.basename(os.environ.get("SHELL", "shell")))); out.flush()
+        if a.alacritty: alacritty_apply({}, reset=True)
+        if not cmd: return 0
+    presets = load_presets()
+    if a.preset not in presets:
+        print(f"termbanner: unknown preset '{a.preset}' (have: {', '.join(presets)})", file=sys.stderr); return 2
+    cfg = json.loads(json.dumps(presets[a.preset]))
+    for k in ("title", "subtitle", "emblem", "project", "font", "engine", "box", "window_title", "info"):
+        v = getattr(a, k)
+        if v is not None: cfg[k] = v
+    if a.small: cfg["big"] = False
+    if a.full_width: cfg["full_width"] = True
+    if a.reset_on_exit: cfg["reset_on_exit"] = True
+    if a.color: cfg["gradient"] = [c.strip() for c in a.color.split(",")]; cfg.setdefault("border", cfg["gradient"][0])
+    if a.color: cfg["border"] = cfg["gradient"][0]
+    if not cfg.get("project"): cfg["project"] = find_project(os.getcwd())
+    mode = a.color_mode or color_mode()
+    theme = dict(cfg.get("theme") or {})
+    apply_theme = a.apply_theme if a.apply_theme is not None else bool(cfg.get("apply_theme", False))
+    if not apply_theme: theme = {}
+    if a.bg: theme["background"] = a.bg
+    if a.fg: theme["foreground"] = a.fg
+    if a.cursor: theme["cursor"] = a.cursor
+    tseq = theme_seq(theme) if mode != "none" or a.bg or a.fg else ""
+    if a.alacritty and cfg.get("alacritty"): alacritty_apply(cfg["alacritty"])
+    isatty = out.isatty()
+    if a.pin:
+        target = cmd or [os.environ.get("SHELL", "/bin/sh")]
+        return run_pinned(cfg, mode, target, tseq, a.window_title, os.environ)
+    if not isatty and a.color_mode is None and not os.environ.get("TERMBANNER_COLOR"): mode = "none"
+    cols = term_size(out).columns if isatty else int(os.environ.get("COLUMNS", 80))
+    lines, ctx = render(cfg, cols, mode, os.getcwd())
+    buf = tseq if isatty or a.bg or a.fg or a.apply_theme else ""
+    if a.clear and isatty: buf += f"{ESC}[H{ESC}[2J"
+    if cfg.get("window_title") and isatty: buf += osc(0, fmt(cfg["window_title"], ctx))
+    out.write(buf + "\n".join(lines) + "\n"); out.flush()
+    if cmd:
+        os.execvp(cmd[0], cmd)
+    return 0
+
+if __name__ == "__main__":
+    try: sys.exit(main())
+    except BrokenPipeError: pass
+    except KeyboardInterrupt: sys.exit(130)

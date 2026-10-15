@@ -1,0 +1,68 @@
+# termbanner presets  (~/.config/termbanner/presets.yaml)
+# keys: title subtitle emblem(claude|danger|leaf|dot|none|"text"|[lines]) gradient[] border text dim
+#       info (str or list; {cwd} {host} {user} {branch} {project} {shell} {time}) label box font engine
+#       big(bool) window_title apply_theme(bool) theme{background foreground cursor palette[16]} alacritty{key: value}
+presets:
+  claude:
+    description: Claude-Code warm orange, full warm dark theme
+    title: CLAUDE
+    subtitle: "✻ Claude Code"
+    emblem: claude
+    gradient: ["#f4b08a", "#d97757", "#b6532f"]
+    border: "#d97757"
+    text: "#e8dccb"
+    dim: "#9c8f7d"
+    info: "{cwd}  ·  {user}@{host}  ·  ⎇ {branch}"
+    window_title: "Claude · {project}"
+    apply_theme: true
+    theme:
+      background: "#1f1b16"
+      foreground: "#e8dccb"
+      cursor: "#d97757"
+      palette: ["#2a251f", "#e0684b", "#9fbf7a", "#e3b26a", "#7fa3c7", "#c58fb3", "#7fbfb5", "#d6c9b6", "#5a5046", "#f08566", "#b8d494", "#f0c987", "#9bbbdc", "#d9a8c9", "#9ad3ca", "#f4ebdd"]
+    alacritty:
+      window.padding.x: 12
+      window.padding.y: 8
+      window.opacity: 0.97
+  prod:
+    description: PRODUCTION danger red - be careful
+    title: PROD
+    subtitle: "⚠  PRODUCTION — changes here are live"
+    emblem: danger
+    gradient: ["#ff6b6b", "#e03131", "#a51111"]
+    border: "#ff3b3b"
+    text: "#ffe3e3"
+    dim: "#c48b8b"
+    label: "{user}@{host}"
+    box: heavy
+    window_title: "⚠ PROD · {host}"
+    apply_theme: true
+    theme:
+      background: "#1e0d0d"
+      foreground: "#f2dede"
+      cursor: "#ff4d4d"
+  dev:
+    description: development green
+    title: DEV
+    subtitle: "development sandbox"
+    emblem: leaf
+    gradient: ["#b9f27c", "#40c057", "#2b8a3e"]
+    border: "#51cf66"
+    text: "#e6f4e6"
+    dim: "#8fa98f"
+    window_title: "dev · {project}"
+    apply_theme: false
+    theme:
+      background: "#0f1a12"
+      foreground: "#dcefdc"
+      cursor: "#51cf66"
+  minimal:
+    description: small single-line, no theme
+    title: "{project}"
+    big: false
+    emblem: "●"
+    gradient: ["#a0a0a0", "#ffffff"]
+    border: "#555555"
+    subtitle: null
+    info: "{cwd}  ·  ⎇ {branch}"
+    apply_theme: false

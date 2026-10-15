@@ -1,0 +1,28 @@
+# termbanner preset 'claude' as an Alacritty theme
+[colors.primary]
+background = '#1f1b16'
+foreground = '#e8dccb'
+
+[colors.cursor]
+cursor = '#d97757'
+text = '#1f1b16'
+
+[colors.normal]
+black = '#2a251f'
+red = '#e0684b'
+green = '#9fbf7a'
+yellow = '#e3b26a'
+blue = '#7fa3c7'
+magenta = '#c58fb3'
+cyan = '#7fbfb5'
+white = '#d6c9b6'
+
+[colors.bright]
+black = '#5a5046'
+red = '#f08566'
+green = '#b8d494'
+yellow = '#f0c987'
+blue = '#9bbbdc'
+magenta = '#d9a8c9'
+cyan = '#9ad3ca'
+white = '#f4ebdd'

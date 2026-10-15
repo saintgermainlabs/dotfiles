@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# claude-term [project] [-- claude args...]  : warm theme + pinned CLAUDE banner + launch claude
+set -euo pipefail
+proj=""
+if [[ $# -gt 0 && "$1" != "--" ]]; then proj="$1"; shift; fi
+[[ "${1:-}" == "--" ]] && shift
+args=(--preset claude --theme --pin --reset-on-exit)
+[[ -n "$proj" ]] && args+=(--project "$proj")
+[[ -n "${ALACRITTY_SOCKET:-}" ]] && args+=(--alacritty)
+exec termbanner "${args[@]}" -- "${CLAUDE_BIN:-claude}" "$@"
