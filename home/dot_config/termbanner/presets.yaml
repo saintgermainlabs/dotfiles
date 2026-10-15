@@ -24,6 +24,40 @@ presets:
       window.padding.x: 12
       window.padding.y: 8
       window.opacity: 0.97
+  kimi:
+    description: Kimi Code (Moonshot) deep-night blue
+    title: KIMI
+    subtitle: "☾ Kimi Code"
+    emblem: dot
+    gradient: ["#9cc8ff", "#3b82f6", "#1d4ed8"]
+    border: "#3b82f6"
+    text: "#dbe7ff"
+    dim: "#7d8fb3"
+    info: "{cwd}  ·  {user}@{host}  ·  ⎇ {branch}"
+    window_title: "Kimi · {project}"
+    apply_theme: true
+    theme:
+      background: "#0e1322"
+      foreground: "#dbe7ff"
+      cursor: "#3b82f6"
+      palette: ["#1a2236", "#f2667a", "#7fd1a8", "#f0c674", "#5b9cff", "#b49cff", "#5fd0e6", "#c8d4ec", "#4a5878", "#ff8597", "#9be3bf", "#ffd88f", "#86b8ff", "#cbb8ff", "#87e1f0", "#eef3ff"]
+  opencode:
+    description: OpenCode monochrome with peach accent
+    title: OPENCODE
+    subtitle: "▣ OpenCode"
+    emblem: dot
+    gradient: ["#ffffff", "#fab283", "#d27c4a"]
+    border: "#fab283"
+    text: "#eeeeee"
+    dim: "#808080"
+    info: "{cwd}  ·  {user}@{host}  ·  ⎇ {branch}"
+    window_title: "OpenCode · {project}"
+    apply_theme: true
+    theme:
+      background: "#0a0a0a"
+      foreground: "#eeeeee"
+      cursor: "#fab283"
+      palette: ["#1e1e1e", "#e06c75", "#7fd88f", "#f5a742", "#5c9cf5", "#9d7cd8", "#56b6c2", "#d4d4d4", "#606060", "#ff8a94", "#9be8a8", "#fab283", "#82b4ff", "#b89cf0", "#7fd0db", "#ffffff"]
   prod:
     description: PRODUCTION danger red - be careful
     title: PROD
