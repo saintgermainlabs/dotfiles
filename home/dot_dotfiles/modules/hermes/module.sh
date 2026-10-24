@@ -5,6 +5,7 @@
 ## @requires hermes
 ## @tags hermes ai agent gateway skills remote
 ## @source functions.sh
+## @source hwedit.sh
 ## @source aliases.sh
 
 # shellcheck shell=bash
@@ -32,6 +33,8 @@ fi
 
 # shellcheck source=functions.sh
 . "$_hm_module_dir/functions.sh"
+# shellcheck source=hwedit.sh
+[ -r "$_hm_module_dir/hwedit.sh" ] && . "$_hm_module_dir/hwedit.sh"
 
 case $- in
   *i*)

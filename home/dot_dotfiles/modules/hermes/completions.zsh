@@ -33,3 +33,6 @@ compdef _hm_config_edit hm_config_edit
 
 # Local config destinations for download/upload.
 compdef _files hm_config_put hm_config_get
+
+_hwedit() { _arguments -s : '--dry-run[download only]' '--list[list editable files]' '--help[show help]' '1:file:' }
+compdef _hwedit hwedit

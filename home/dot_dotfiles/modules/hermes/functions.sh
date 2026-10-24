@@ -240,6 +240,7 @@ Usage:
   hm_config_put <file>            Upload a local config.yaml
   hm_config_edit [--editor ...]   Download, edit locally, optionally upload
   hm_status                       Show host, container, and hermes status
+  hwedit [file]                   Hermes Workspace (ar4vlr51...): fzf-pick /opt/data file, edit, upload (hwedit -h)
   hm_refresh                      Re-discover the app container name
 
 Env:

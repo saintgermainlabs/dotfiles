@@ -41,3 +41,6 @@ complete -o bashdefault -o default -F _hm_config_edit_completion hm_config_edit
 
 # Local config destinations for download/upload.
 complete -o bashdefault -o default hm_config_put hm_config_get
+
+# hwedit [--dry-run|--list] <file>  (files come from the remote container; flags only here)
+complete -W '--dry-run --list --help' hwedit
