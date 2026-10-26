@@ -1,21 +1,33 @@
 #!/usr/bin/env bash
 # coolify-inventory.sh — YAML inventory of Coolify compose stacks.
-# Usage: coolify-inventory.sh [output.yaml]   (default ~/data/inv/coolify-inventory.yaml; or COOLIFY_INVENTORY_OUT=...; COOLIFY_ROOT=/data/coolify)
+# Usage: coolify-inventory.sh [raw|paths] [output.yaml]   (also --mode=raw|paths)
+#   raw   (default) full inventory -> ~/data/inv/coolify-inventory.yaml
+#   paths stack dirs, compose files, volumes/bind mounts, working_dir, build context -> ~/data/inv/coolify-paths.yaml
+#   COOLIFY_INVENTORY_OUT=... overrides output; COOLIFY_ROOT=/data/coolify
 set -euo pipefail
-OUT="${1:-${COOLIFY_INVENTORY_OUT:-$HOME/data/inv/coolify-inventory.yaml}}"
+MODE=raw
+case "${1:-}" in
+  raw|paths) MODE="$1"; shift ;;
+  --mode=*) MODE="${1#--mode=}"; shift ;;
+  --mode) MODE="${2:?}"; shift 2 ;;
+  -h|--help) sed -n '2,6p' "$0"; exit 0 ;;
+esac
+case "$MODE" in raw|paths) ;; *) echo "unknown mode: $MODE (raw|paths)" >&2; exit 2 ;; esac
+if [ "$MODE" = paths ]; then DEF="$HOME/data/inv/coolify-paths.yaml"; else DEF="$HOME/data/inv/coolify-inventory.yaml"; fi
+OUT="${1:-${COOLIFY_INVENTORY_OUT:-$DEF}}"
 mkdir -p "$(dirname "$OUT")"
 ROOT="${COOLIFY_ROOT:-/data/coolify}"
 
 
-for d in "$ROOT/services" "$ROOT/applications"; do
+[ "$MODE" = raw ] && for d in "$ROOT/services" "$ROOT/applications"; do
   [ -d "$d" ] || { echo "(missing: $d)"; continue; }
   if command -v tree >/dev/null 2>&1; then tree -L 2 "$d"; else find "$d" -maxdepth 2 | sort; fi
 done
 
 command -v python3 >/dev/null || { echo "python3 required" >&2; exit 1; }
-python3 - "$ROOT" "$OUT" <<'PY'
+python3 - "$ROOT" "$OUT" "$MODE" <<'PY'
 import sys, os, re, glob, json, datetime, socket
-root, out = sys.argv[1], sys.argv[2]
+root, out, mode = sys.argv[1], sys.argv[2], sys.argv[3]
 try:
     import yaml
 except ImportError:
@@ -62,7 +74,69 @@ def entry(n, s):
     if labels: e["labels"] = labels
     return e
 
+def absp(p, base):
+    p = str(p)
+    if p.startswith("~"): return os.path.expanduser(p)
+    return p if p.startswith("/") or "$" in p else os.path.normpath(os.path.join(base, p))
+
+def vol_entries(v, base, named):
+    res = []
+    for x in v or []:
+        if isinstance(x, dict):
+            src, tgt, typ = x.get("source"), x.get("target"), x.get("type")
+            ro = bool(x.get("read_only"))
+        else:
+            parts = str(x).split(":")
+            if len(parts) == 1: src, tgt = None, parts[0]
+            else: src, tgt = parts[0], parts[1]
+            ro = len(parts) > 2 and "ro" in parts[2].split(",")
+            typ = None
+        if typ is None:
+            typ = "anonymous" if not src else ("bind" if re.match(r"^[./~$]", str(src)) else "volume")
+        e = {"type": typ, "target": tgt}
+        if typ == "bind": e["host_path"] = absp(src, base)
+        elif typ == "volume" and src:
+            e["volume"] = str(src)
+            nv = named.get(str(src)) or {}
+            if nv.get("name"): e["docker_volume_name"] = nv["name"]
+            dev = (nv.get("driver_opts") or {}).get("device")
+            if dev: e["host_path"] = absp(dev, base)
+        elif src: e["source"] = str(src)
+        if ro: e["read_only"] = True
+        res.append(e)
+    return res
+
+def entry_paths(n, s, base, named):
+    s = s or {}
+    e = {"name": n}
+    labels = kv_list(s.get("labels"))
+    for k in ("app.name", "app.component"):
+        if labels.get(k): e[k] = labels[k]
+    if s.get("container_name"): e["container_name"] = s["container_name"]
+    if s.get("image"): e["image"] = s["image"]
+    if s.get("working_dir"): e["working_dir"] = s["working_dir"]
+    b = s.get("build")
+    if b:
+        ctx = b if isinstance(b, str) else (b.get("context") or ".")
+        e["build_context"] = absp(ctx, base)
+        if isinstance(b, dict) and b.get("dockerfile"): e["dockerfile"] = b["dockerfile"]
+    for k in ("env_file",):
+        if s.get(k):
+            v = s[k] if isinstance(s[k], list) else [s[k]]
+            e[k] = [absp(x if isinstance(x, str) else x.get("path"), base) for x in v]
+    vols = vol_entries(s.get("volumes"), base, named)
+    if vols: e["volumes"] = vols
+    return e
+
 def parse(path):
+    if yaml and mode == "paths":
+        try:
+            doc = yaml.safe_load(open(path)) or {}
+            named = {str(k): (v or {}) for k, v in (doc.get("volumes") or {}).items()}
+            base = os.path.dirname(path)
+            return [entry_paths(n, s, base, named) for n, s in (doc.get("services") or {}).items()]
+        except Exception as e:
+            return [{"error": str(e)}]
     if yaml:
         try:
             doc = yaml.safe_load(open(path)) or {}
@@ -122,7 +196,44 @@ for kind in ("services", "applications"):
             stacks.append({"id": d, "path": p, "compose_files": [{"file": f, "services": parse(f)} for f in files]})
     inv["roots"][kind] = {"path": base, "exists": os.path.isdir(base), "stacks": stacks}
 
-docker_enrich(inv)
+def docker_mounts(inv):
+    """paths mode: add live mounts (incl. resolved named-volume Mountpoint) from running containers."""
+    import subprocess
+    try:
+        ids = subprocess.run(["docker", "ps", "-q"], capture_output=True, text=True, timeout=15).stdout.split()
+        if not ids: return
+        data = json.loads(subprocess.run(["docker", "inspect", *ids], capture_output=True, text=True, timeout=30).stdout or "[]")
+    except Exception:
+        return
+    by = {}
+    for c in data:
+        lb = (c.get("Config") or {}).get("Labels") or {}
+        m = [{"type": x.get("Type"), "source": x.get("Source"), "target": x.get("Destination"), **({"volume": x["Name"]} if x.get("Name") else {})} for x in c.get("Mounts") or []]
+        by[c.get("Name", "").lstrip("/")] = (lb, m)
+        p, sv = lb.get("com.docker.compose.project"), lb.get("com.docker.compose.service")
+        if p and sv: by[(p, sv)] = (lb, m)
+    for r in inv["roots"].values():
+        for st in r["stacks"]:
+            for cf in st["compose_files"]:
+                for e in cf["services"]:
+                    if "name" not in e: continue
+                    hit = by.get(e.get("container_name") or "") or by.get((st["id"], e["name"])) \
+                          or next((v for k, v in by.items() if isinstance(k, str) and k.startswith(f"{e['name']}-{st['id']}")), None)
+                    if not hit: continue
+                    lb, m = hit
+                    e["running"] = True
+                    for k in ("app.name", "app.component"):
+                        if not e.get(k) and lb.get(k): e[k] = lb[k]
+                    if m: e["live_mounts"] = m
+
+if mode == "paths":
+    for r in inv["roots"].values():
+        r["stacks"] = [{"id": st["id"], "stack_dir": st["path"],
+                        "compose_files": [{"compose_file": cf["file"], "services": cf["services"]} for cf in st["compose_files"]]}
+                       for st in r["stacks"]]
+    docker_mounts(inv)
+else:
+    docker_enrich(inv)
 with open(out, "w") as fh:
     if yaml: yaml.safe_dump(inv, fh, sort_keys=False, default_flow_style=False)
     else:
@@ -142,5 +253,5 @@ with open(out, "w") as fh:
                     else: fh.write(f"{sp}- {json.dumps(v)}\n")
         dump(inv)
 n = sum(len(cf["services"]) for r in inv["roots"].values() for s in r["stacks"] for cf in s["compose_files"])
-print(f"\nWrote {out} ({n} compose services)")
+print(f"\nWrote {out} [{mode}] ({n} compose services)")
 PY
