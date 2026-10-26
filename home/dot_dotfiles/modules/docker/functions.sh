@@ -1,13 +1,13 @@
 # Docker helpers — sourced when the docker module is enabled.
 
-# List running containers with name, status, and ports.
+# List running containers with name, status, ports, and app labels when set.
 ## @category Docker
-## @description List running containers with name, status, and ports in a table format
+## @description List running containers with name, status, ports, and app.name / app.component labels when present
 ## @usage cps
 ## @requires docker
 ## @see docker-ps(1)
 cps() {
-  docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+  docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Label \"app.name\"}}\t{{.Label \"app.component\"}}"
 }
 
 
