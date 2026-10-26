@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # coolify-inventory.sh — YAML inventory of Coolify compose stacks.
-# Usage: coolify-inventory.sh [output.yaml]   (or COOLIFY_INVENTORY_OUT=...; COOLIFY_ROOT=/data/coolify)
+# Usage: coolify-inventory.sh [output.yaml]   (default ~/data/inv/coolify-inventory.yaml; or COOLIFY_INVENTORY_OUT=...; COOLIFY_ROOT=/data/coolify)
 set -euo pipefail
-OUT="${1:-${COOLIFY_INVENTORY_OUT:-$HOME/coolify-inventory.yaml}}"
+OUT="${1:-${COOLIFY_INVENTORY_OUT:-$HOME/data/inv/coolify-inventory.yaml}}"
+mkdir -p "$(dirname "$OUT")"
 ROOT="${COOLIFY_ROOT:-/data/coolify}"
 
 
