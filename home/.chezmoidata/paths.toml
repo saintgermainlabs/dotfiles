@@ -13,7 +13,9 @@
 
 # Prepended to PATH (highest priority). Use sparingly.
 prepend = [
-  "/usr/bin"
+  "/usr/bin",
+  "~/bin",
+  "~/.local/bin"
 ]
 
 # Appended on every host.

@@ -1,6 +1,7 @@
 {{- /* Optional modules under ~/.dotfiles/modules/<name>/.
-     Prefer module.sh (loads functions + interactive aliases). Else functions.sh,
-     aliases.sh, or legacy functions (docker). install.sh/README/config not sourced.
+     _df_load_module (common/helpers.sh) reads <name>/config.toml [bootstrap]
+     (env -> files -> interactive -> bash|zsh). Without config.toml: module.sh,
+     else functions.sh, aliases.sh, functions, local_to_remote.sh.
 
      local_to_remote and hermes-v2 are only sourced when .role == "local".
 */ -}}
@@ -15,16 +16,7 @@
 {{- if or (not (has $name $localOnly)) (eq $.role "local") }}
 
 # module: {{ $name }}
-_df_mod="${DF_DIR}/modules/{{ $name }}"
-
-if [ -r "${_df_mod}/module.sh" ]; then
-  . "${_df_mod}/module.sh"
-else
-  [ -r "${_df_mod}/functions.sh" ] && . "${_df_mod}/functions.sh"
-  [ -r "${_df_mod}/aliases.sh" ] && . "${_df_mod}/aliases.sh"
-  [ -r "${_df_mod}/functions" ] && . "${_df_mod}/functions"
-  [ -r "${_df_mod}/local_to_remote.sh" ] && . "${_df_mod}/local_to_remote.sh"
-fi
+_df_load_module "${DF_DIR}/modules/{{ $name }}"
 
 {{- end }}
 {{- end }}

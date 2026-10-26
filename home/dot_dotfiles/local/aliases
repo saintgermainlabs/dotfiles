@@ -1,0 +1,4 @@
+# Local (laptop) aliases (bash and zsh).
+# Sourced on role=local hosts by .chezmoitemplates/source-role.tmpl, after common/ and local/env.
+# (Was a Python placeholder, local/aliases.sh, whose main() did nothing; no aliases to carry over.)
+# Add entries with: chezmoi-helpers add-alias NAME 'COMMAND' --role local

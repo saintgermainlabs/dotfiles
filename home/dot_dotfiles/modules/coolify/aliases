@@ -1,0 +1,6 @@
+alias coolify_id="rg -s --glob '**/docker-compose.yml' '^\s*image:\s*(.*)' -r '$1'"
+alias get_container_images="rg -n -s \
+  --glob 'docker-compose.yml' \
+  --glob '!vendor/**' \
+  '^\s*image:\s*(.+)' \
+  projects/template-raw-data/coolify/services"

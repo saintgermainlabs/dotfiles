@@ -1052,25 +1052,109 @@ _manual_render_count() {
 ## @category Manual
 ## @description Print manual CLI usage help.
 _manual_usage() {
-  cat <<'EOF'
-Usage: manual [options] [pattern]
+  local topic="${1:-}" b="" d="" r=""
+  if [ -t 1 ]; then b=$'\033[1m'; d=$'\033[2m'; r=$'\033[0m'; fi
+  case "$topic" in
+    list)
+      cat <<EOF
+${b}manual list${r} <what>  ${d}plain, pipe-friendly lists${r}
 
+  manual list modules      Module id, title, description
+  manual list functions    Every function and its module
+  manual list aliases      Every alias and its module
+  manual list categories   Categories with entry counts
+
+  Add --all to include internal helpers:  manual --all list functions
+EOF
+      return ;;
+    module)
+      cat <<EOF
+${b}manual module${r} <name>  ${d}aliases and functions from one module${r}
+
+  manual module hermes
+  manual module docker
+  See names with: manual list modules
+EOF
+      return ;;
+    category)
+      cat <<EOF
+${b}manual category${r} <name>  ${d}everything in one category${r}
+
+  manual category Git
+  See names with: manual list categories
+EOF
+      return ;;
+    grep)
+      cat <<EOF
+${b}manual grep${r} <pattern>  ${d}search names and descriptions, always as a list${r}
+
+  manual grep docker
+  manual grep "remote server"
+EOF
+      return ;;
+  esac
+  cat <<EOF
+${b}manual${r} ${d}- searchable manual for your dotfiles aliases and functions${r}
+
+${b}Usage${r}
   manual                  Compact module-aware index
+  manual <name>           Detailed view of a command or module
   manual <pattern>        Search modules and commands
-  manual <exact-name>     Detailed command or module view
 
-Options:
+${b}Subcommands${r}
+  manual module <name>    Aliases and functions from one module only
+  manual category <name>  Aliases and functions in one category
+  manual grep <pattern>   Search everything (never jumps to a detail view)
+  manual list <what>      Plain list: modules | functions | aliases | categories
+
+${b}Options${r}
   --all                   Include @internal / _-prefixed helpers
   --functions             Show functions only
   --aliases               Show aliases only
   --category <category>   Filter by command/module category
   --module <module>       Filter by module id or title
   --list                  Same as default index (explicit)
-  -h, --help              Show this help
+  -h, --help              Show this help (or: manual <subcommand> -h)
 
-Environment:
+${b}Environment${r}
   MANUAL_ALL=1            Same as --all
+  DEBUG_MODE=1            Shell startup lists every file it sources
+
+${b}Examples${r}
+  manual hm               manual module hermes      manual list modules
+  manual grep tailscale   manual --functions git    manual -h list
 EOF
+}
+
+## @internal
+## @category Manual
+## @description Print a plain list of modules, functions, aliases, or categories.
+_manual_list() {
+  local what="$1" show_internal="$2" i
+  _manual_discover
+  case "$what" in
+    modules|module|mods)
+      for i in "${!MANUAL_M_ID[@]}"; do
+        printf "%-20s %-22s %s\n" "${MANUAL_M_ID[$i]}" "${MANUAL_M_TITLE[$i]}" "${MANUAL_M_DESC[$i]}"
+      done | sort
+      ;;
+    functions|function|fns|aliases|alias)
+      local want="function"
+      case "$what" in alias*) want="alias" ;; esac
+      for i in "${!MANUAL_C_NAME[@]}"; do
+        [ "${MANUAL_C_TYPE[$i]}" = "$want" ] || continue
+        [ "$show_internal" = "1" ] || [ "${MANUAL_C_INTERNAL[$i]}" != "1" ] || continue
+        printf "%-24s %s\n" "${MANUAL_C_NAME[$i]}" "${MANUAL_C_MODULE[$i]}"
+      done | sort -u
+      ;;
+    categories|category|cats)
+      { printf "%s\n" "${MANUAL_C_CAT[@]}" "${MANUAL_M_CAT[@]}"; } | sed '/^$/d' | sort | uniq -c | awk '{c=$1; $1=""; sub(/^ /,""); printf "%-24s %d\n", $0, c}'
+      ;;
+    *)
+      echo "manual: list what? modules | functions | aliases | categories" >&2
+      return 2
+      ;;
+  esac
 }
 
 # ---------------------------------------------------------------------------
@@ -1094,6 +1178,10 @@ EOF
 ## @example manual
 ## @example manual vault
 ## @example manual addcommitpush
+## @example manual module hermes
+## @example manual category git
+## @example manual grep docker
+## @example manual list modules
 ## @example MANUAL_ALL=1 manual
 manual() {
   local pattern="" mode="all" show_internal="${MANUAL_ALL:-0}"
@@ -1104,6 +1192,15 @@ manual() {
     echo "manual: currently requires bash (open a bash shell or run: bash -ic manual)" >&2
     return 2
   fi
+
+  # -h/--help anywhere: general help, or help for the subcommand given.
+  local _a _sub=""
+  for _a in "$@"; do
+    case "$_a" in module|category|grep|list) [ -z "$_sub" ] && _sub="$_a" ;; esac
+  done
+  for _a in "$@"; do
+    case "$_a" in -h|--help) _manual_usage "$_sub"; return 0 ;; esac
+  done
 
   # Clean argument parsing (no scattered positional checks).
   while [ "$#" -gt 0 ]; do
@@ -1163,6 +1260,33 @@ manual() {
     esac
   done
 
+  # Subcommands: manual module <name> | category <name> | grep <pattern>
+  local no_exact=0
+  if [ "${1:-}" = "list" ]; then
+    _manual_list "${2:-}" "$show_internal"
+    return $?
+  fi
+
+  case "${1:-}" in
+    module|category|grep)
+      if [ -z "${2:-}" ]; then
+        echo "manual: $1 requires an argument" >&2
+        _manual_usage "$1" >&2
+        return 2
+      fi
+      case "$1" in
+        module) module_filter="$2" ;;
+        category) category="$2" ;;
+        grep) pattern="$2"; no_exact=1 ;;
+      esac
+      shift 2
+      if [ "$#" -gt 0 ]; then
+        echo "manual: too many arguments" >&2
+        return 2
+      fi
+      ;;
+  esac
+
   # Remaining positional args form the search pattern.
   if [ "$#" -gt 0 ]; then
     pattern="$1"
@@ -1187,7 +1311,7 @@ manual() {
   printf "\n"
 
   # Exact command detail (prefer over search index / module detail).
-  if [ -n "$pattern" ] && [ "$list_only" -eq 0 ] && [ -z "$category" ] && [ -z "$module_filter" ]; then
+  if [ -n "$pattern" ] && [ "$no_exact" -eq 0 ] && [ "$list_only" -eq 0 ] && [ -z "$category" ] && [ -z "$module_filter" ]; then
     if exact_cmd="$(_manual_find_exact_command "$pattern" "$show_internal")"; then
       # If mode filters exclude this type, fall through to search.
       local ok=1

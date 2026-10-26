@@ -1,15 +1,7 @@
 
 # Common helper functions (bash and zsh).
 
-## @description Checks whether a command is available in the current PATH.
-## @category Helpers
-## @arg $1 string The command name to check.
-## @exitcode 0 If the command is installed and available.
-## @exitcode 1 If the command cannot be found.
-## @see command(1)
-has() {
-  command -v "$1" >/dev/null 2>&1
-}
+
 
 ## @description Creates a directory, including missing parent directories, and changes into it.
 ## @category Helpers
@@ -58,6 +50,58 @@ up() {
   done
 
   cd -- "$destination"
+}
+
+## @description Runs chezmoi apply, but automatically skips any file that was changed outside chezmoi.
+## @description Files whose current contents differ from what chezmoi last wrote are left untouched and listed; everything else is applied without prompting.
+## @category Helpers
+## @arg $@ string Optional extra flags passed to chezmoi apply (e.g. -v, --dry-run).
+## @exitcode 0 If all non-conflicting targets were applied (or nothing needed applying).
+## @exitcode 1 If chezmoi is missing or chezmoi apply fails.
+## @stdout Prints the skipped files and the number of files applied.
+## @stderr Prints chezmoi errors.
+## @example
+##   czapply
+##   czapply -v --dry-run
+## @see chezmoi(1)
+czapply() {
+  if ! command -v chezmoi >/dev/null 2>&1; then
+    printf 'Error: chezmoi not found.\n' >&2
+    return 1
+  fi
+
+  local status_out line first second rel_path
+  local -a apply_targets skipped
+  apply_targets=()
+  skipped=()
+
+  status_out="$(chezmoi status)" || return 1
+
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    first="${line:0:1}"
+    second="${line:1:1}"
+    rel_path="${line:3}"
+    if [ "$first" != " " ]; then
+      # Changed on disk since chezmoi last wrote it: skip.
+      skipped+=("$rel_path")
+    elif [ "$second" != " " ]; then
+      apply_targets+=("$HOME/$rel_path")
+    fi
+  done <<< "$status_out"
+
+  if [ "${#skipped[@]}" -gt 0 ]; then
+    printf 'Skipping %d locally modified file(s):\n' "${#skipped[@]}"
+    printf '  ~/%s\n' "${skipped[@]}"
+  fi
+
+  if [ "${#apply_targets[@]}" -eq 0 ]; then
+    printf 'Nothing to apply.\n'
+    return 0
+  fi
+
+  chezmoi apply --no-tty "$@" -- "${apply_targets[@]}" || return 1
+  printf 'Applied %d file(s).\n' "${#apply_targets[@]}"
 }
 
 ## @description Creates a gzip-compressed tar archive from a file or directory.
@@ -161,19 +205,843 @@ venv() {
 
 # Find helpers
 
-## @description Finds all files with common video extensions.
-## @category Find
-## @arg $1 string The path to the directory to search from. A trailing slash is removed when constructing the archive name.
-## @example
-##   find_video_extensions ~
-##   # Finds videos in your home directory
-## @see find(1)
-find_video_extensions() {
-    local target_dir="${1:-.}"
-    find "$target_dir" -type f \( -iname "*.mp4" -o -iname "*.mkv" -o -iname "*.avi" -o -iname "*.mov" -o -iname "*.flv" -o -iname "*.wmv" -o -iname "*.webm" \)
+
+function search (){
+ egrep -roiI $1 . | sort | uniq
+}
+
+function whereis (){
+  find . -name "$1*";
 }
 
 
+
+
+
+
+## @description Finds files categorized by media/type (docs, images, videos, archives) with optional fuzzy keyword matching.
+## @category Find
+## @arg $1 string [optional] Category to search: "docs", "images", "videos", or "archives". If omitted, prompts with an interactive menu.
+## @arg $2 string [optional] Search query for fuzzy matching against the filename (e.g., "dcmnt" matches "document").
+## @arg $3 string [optional] Root directory path to begin the search (defaults to current directory ".").
+## @exitcode 0 If the search completes successfully or menu exit is selected.
+## @exitcode 1 If an invalid category or non-existent search directory is supplied.
+## @stderr Prints an error message if the category is unsupported or the specified directory does not exist.
+## @example
+##   fft
+##   fft docs
+##   fft images sunset
+##   fft videos clip ~/Movies
+##   fft archives bak /var/backups
+## @see find(1)
+fft() {
+  local category="$1"
+  local query="$2"
+  local dir="${3:-.}"
+
+  # Prompt with an interactive menu if no category is provided
+  if [ -z "$category" ]; then
+    local options=("docs" "images" "videos" "archives" "Quit")
+    printf 'Select a category to search:\n'
+    select opt in "${options[@]}"; do
+      case "$opt" in
+        docs|images|videos|archives)
+          category="$opt"
+          break
+          ;;
+        Quit)
+          return 0
+          ;;
+      esac
+    done
+  fi
+
+  # Build find command based on category
+  local -a patterns=()
+  case "$category" in
+    docs)
+      patterns=("*.pdf" "*.doc" "*.docx" "*.txt" "*.md" "*.odt" "*.rtf")
+      ;;
+    images)
+      patterns=("*.jpg" "*.jpeg" "*.png" "*.gif" "*.bmp" "*.svg" "*.webp")
+      ;;
+    videos)
+      patterns=("*.mp4" "*.avi" "*.mkv" "*.mov" "*.wmv" "*.flv" "*.webm")
+      ;;
+    archives)
+      patterns=("*.zip" "*.tar" "*.gz" "*.bz2" "*.xz" "*.7z" "*.rar")
+      ;;
+    *)
+      echo "Error: Unsupported category: $category" >&2
+      return 1
+      ;;
+  esac
+
+  # Verify search directory exists
+  if [ ! -d "$dir" ]; then
+    echo "Error: Directory does not exist: $dir" >&2
+    return 1
+  fi
+
+  # Build and execute find command
+  local find_args=("$dir" "-type" "f" "(")
+  local first=1
+  for pattern in "${patterns[@]}"; do
+    if [ $first -eq 1 ]; then
+      find_args+=("-iname" "$pattern")
+      first=0
+    else
+      find_args+=("-o" "-iname" "$pattern")
+    fi
+  done
+  find_args+=(")")
+
+  # Apply fuzzy filter if query is provided
+  if [ -n "$query" ]; then
+    find "${find_args[@]}" 2>/dev/null | grep -i "$query"
+  else
+    find "${find_args[@]}" 2>/dev/null
+  fi
+}
+
+
+
+
+## @description Searches for regular files by name/metadata, with support for fuzzy matching, extension filtering, size constraints, and optional inner content inspection.
+## @category Find
+## @arg $1 string [optional] Directory path or filename pattern depending on options provided.
+## @arg $2 string [optional] Pattern to match against filenames (defaults to "*").
+## @opt -f, --fuzzy Enables fuzzy character sequence matching for filenames (e.g., "cnf" matches "config").
+## @opt -e, --ext <ext> Filters files by file extension without the leading dot (e.g., "py", "rs").
+## @opt --dot-files Restricts search to hidden files or files within hidden directories.
+## @opt --start-dir <path> Root directory path to begin the search (defaults to current directory ".").
+## @opt --min-size <size> Filters files meeting a minimum size threshold using find syntax (e.g., "10M", "500k").
+## @opt -c, --contains <text> Filters matched files to only those containing this exact text string.
+## @opt --contains-regex <regex> Filters matched files to only those containing this ERE regular expression.
+## @opt --show-matches Prints line numbers and matching line snippets alongside filenames when content filtering is active.
+## @exitcode 0 If the file search completes successfully.
+## @exitcode 1 If invalid options are supplied or required argument parameters are missing.
+## @stderr Prints usage guidelines or option validation errors to standard error.
+## @example
+##   ff main.rs
+##   ff -e json config
+##   ff -f -e py --start-dir src test
+##   ff --min-size 50M dump
+##   ff -e py -c "async def" app
+##   ff -c "TODO" --show-matches src
+ff () {
+    local fuzzy=0
+    local dotfiles_only=0
+    local start_dir=""
+    local ext=""
+    local min_size=""
+    local contains_text=""
+    local contains_regex=""
+    local show_matches=0
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -f|--fuzzy)
+                fuzzy=1; shift ;;
+            -e|--ext)
+                ext="$2"; shift 2 ;;
+            --ext=*)
+                ext="${1#*=}"; shift ;;
+            --dot-files)
+                dotfiles_only=1; shift ;;
+            --start-dir)
+                start_dir="$2"; shift 2 ;;
+            --start-dir=*)
+                start_dir="${1#*=}"; shift ;;
+            --min-size)
+                min_size="$2"; shift 2 ;;
+            --min-size=*)
+                min_size="${1#*=}"; shift ;;
+            -c|--contains)
+                contains_text="$2"; shift 2 ;;
+            --contains=*)
+                contains_text="${1#*=}"; shift ;;
+            --contains-regex)
+                contains_regex="$2"; shift 2 ;;
+            --contains-regex=*)
+                contains_regex="${1#*=}"; shift ;;
+            --show-matches)
+                show_matches=1; shift ;;
+            --)
+                shift; break ;;
+            -*)
+                echo "Usage: ff [-f] [-e ext] [-c text] [--contains-regex re] [--show-matches] [--dot-files] [--start-dir dir] [--min-size size] [dir] <pattern>" >&2
+                return 1
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
+    local dir="."
+    local query=""
+
+    if [[ -n "$start_dir" ]]; then
+        dir="$start_dir"
+        query="${1:-*}"
+    else
+        if [[ $# -ge 2 ]]; then
+            dir="$1"; query="$2"
+        elif [[ $# -eq 1 ]]; then
+            query="$1"
+        else
+            query="*"
+        fi
+    fi
+
+    local pattern
+    if [[ $fuzzy -eq 1 && "$query" != "*" ]]; then
+        local chars
+        chars=$(printf '%s' "$query" | sed 's/./&*/g')
+        pattern="*${chars}"
+    else
+        pattern="*${query}*"
+    fi
+
+    if [[ -n "$ext" ]]; then
+        pattern="${pattern%.*}.${ext#.}"
+    fi
+
+    local find_args=("$dir" -type f)
+
+    if [[ $dotfiles_only -eq 1 ]]; then
+        find_args+=(-path '*/.*')
+    fi
+
+    if [[ -n "$min_size" ]]; then
+        find_args+=(-size "+${min_size}")
+    fi
+
+    find_args+=(-iname "$pattern")
+
+    # If no content filter, output the paths directly
+    if [[ -z "$contains_text" && -z "$contains_regex" ]]; then
+        find "${find_args[@]}"
+        return $?
+    fi
+
+    # Set up grep arguments for content filtering
+    local grep_args=()
+    if [[ $show_matches -eq 1 ]]; then
+        grep_args+=(-n -H --color=auto)
+    else
+        grep_args+=(-l)
+    fi
+
+    if [[ -n "$contains_text" ]]; then
+        grep_args+=(-F "$contains_text")
+    else
+        grep_args+=(-E "$contains_regex")
+    fi
+
+    find "${find_args[@]}" -print0 2>/dev/null | xargs -0 grep "${grep_args[@]}" 2>/dev/null
+}
+
+
+
+## @description Searches file contents for a target string/regex first, then filters matching files by filename globs, extensions, or regular expressions.
+## @category Find
+## @arg $1 string [required] Target text or regular expression to locate inside files.
+## @opt -r, --regex Treats the search query as an ERE regular expression (defaults to exact string matching).
+## @opt -i, --ignore-case Performs case-insensitive matching across file contents.
+## @opt -n, --name <pattern> Filters matched paths using a filename glob pattern (e.g., "*controller*").
+## @opt -e, --ext <ext> Filters matched paths to only include files with this extension (e.g., "tsx", "yaml").
+## @opt --name-regex <regex> Filters matched paths where the file basename matches an ERE regular expression.
+## @opt --dot-files Includes hidden files and directories in the content scan (omitted by default).
+## @opt --start-dir <path> Root directory path to begin content search (defaults to current directory ".").
+## @opt -v, --verbose Prints matched line numbers and content previews instead of returning file paths only.
+## @exitcode 0 If files containing the target content are located.
+## @exitcode 1 If no search keyword is provided or no matching files exist.
+## @stderr Prints usage help when the target keyword argument is missing.
+## @example
+##   ffi "AWS_SECRET_KEY"
+##   ffi -e py "import numpy"
+##   ffi --name "*controller*" "auth"
+##   ffi --name-regex "^[A-Z].*\.tsx$" "useState"
+##   ffi -i -v --start-dir ./src "deprecated"
+ffi () {
+    local is_regex=0
+    local ignore_case=0
+    local dotfiles=0
+    local start_dir="."
+    local name_filter=""
+    local name_regex=""
+    local ext=""
+    local verbose=0
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -r|--regex)
+                is_regex=1; shift ;;
+            -i|--ignore-case)
+                ignore_case=1; shift ;;
+            -n|--name)
+                name_filter="$2"; shift 2 ;;
+            --name=*)
+                name_filter="${1#*=}"; shift ;;
+            --name-regex)
+                name_regex="$2"; shift 2 ;;
+            --name-regex=*)
+                name_regex="${1#*=}"; shift ;;
+            -e|--ext)
+                ext="$2"; shift 2 ;;
+            --ext=*)
+                ext="${1#*=}"; shift ;;
+            --dot-files)
+                dotfiles=1; shift ;;
+            --start-dir)
+                start_dir="$2"; shift 2 ;;
+            --start-dir=*)
+                start_dir="${1#*=}"; shift ;;
+            -v|--verbose)
+                verbose=1; shift ;;
+            --)
+                shift; break ;;
+            -*)
+                echo "Usage: ffi [-r] [-i] [-v] [-n name] [-e ext] [--name-regex re] [--dot-files] [--start-dir dir] <keyword>" >&2
+                return 1
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
+    local keyword="${1:-}"
+    if [[ -z "$keyword" ]]; then
+        echo "Error: Search keyword/pattern required." >&2
+        return 1
+    fi
+
+    # Build find constraints for path/extension/name before reading content
+    local find_args=("$start_dir" -type f)
+
+    if [[ $dotfiles -eq 0 ]]; then
+        find_args+=(-not -path '*/.*')
+    fi
+
+    if [[ -n "$ext" ]]; then
+        find_args+=(-name "*.${ext#.}")
+    fi
+
+    if [[ -n "$name_filter" ]]; then
+        if [[ "$name_filter" != *"*"* ]]; then
+            find_args+=(-iname "*${name_filter}*")
+        else
+            find_args+=(-iname "$name_filter")
+        fi
+    fi
+
+    # Prepare grep parameters
+    local grep_flags=()
+    [[ $ignore_case -eq 1 ]] && grep_flags+=(-i)
+
+    if [[ $is_regex -eq 1 ]]; then
+        grep_flags+=(-E "$keyword")
+    else
+        grep_flags+=(-F "$keyword")
+    fi
+
+    # Execute content search
+    if [[ $verbose -eq 1 ]]; then
+        # Verbose: show lines, then filter filenames if name_regex is supplied
+        if [[ -n "$name_regex" ]]; then
+            find "${find_args[@]}" -print0 2>/dev/null \
+                | xargs -0 grep -n -H --color=auto "${grep_flags[@]}" 2>/dev/null \
+                | awk -v re="$name_regex" -F: '
+                    {
+                        split($1, parts, "/")
+                        filename = parts[length(parts)]
+                        if (filename ~ re) print $0
+                    }'
+        else
+            find "${find_args[@]}" -print0 2>/dev/null \
+                | xargs -0 grep -n -H --color=auto "${grep_flags[@]}" 2>/dev/null
+        fi
+    else
+        # File list only
+        if [[ -n "$name_regex" ]]; then
+            find "${find_args[@]}" -print0 2>/dev/null \
+                | xargs -0 grep -l "${grep_flags[@]}" 2>/dev/null \
+                | awk -v re="$name_regex" '
+                    {
+                        split($0, parts, "/")
+                        filename = parts[length(parts)]
+                        if (filename ~ re) print $0
+                    }'
+        else
+            find "${find_args[@]}" -print0 2>/dev/null \
+                | xargs -0 grep -l "${grep_flags[@]}" 2>/dev/null
+        fi
+    fi
+}
+
+
+## @description Recursively searches file contents for patterns with support for fuzzy character regex expansion, context lines, extension scoping, and dotfiles.
+## @category Find
+## @arg $1 string [required] Search query string or sequence to find inside files.
+## @opt -f, --fuzzy Converts the search query into a sequence matching characters separated by wildcards (e.g., "errh" matches "e.*r.*r.*h").
+## @opt -i, --ignore-case Performs case-insensitive content searching (default is case-sensitive).
+## @opt -e, --ext <ext> Restricts search to files ending in this specific extension (e.g., "ts", "py").
+## @opt -C, --context <int> Prints specified number of lines of leading and trailing context around each match.
+## @opt -B, --before <int> Prints specified number of lines of leading context before matches.
+## @opt -A, --after <int> Prints specified number of lines of trailing context after matches.
+## @opt --dot-files Includes hidden files and files inside hidden directories (omitted by default).
+## @opt --start-dir <path> Root directory path to begin recursive inspection (defaults to current directory ".").
+## @exitcode 0 If one or more pattern matches are found.
+## @exitcode 1 If no query is provided, invalid flags are passed, or no matches are found.
+## @stderr Prints usage help when query parameter is missing or options are unrecognized.
+## @example
+##   fg "handleError"
+##   fg -i -e rs "mutex"
+##   fg -f -e py "getusr"
+##   fg -C 3 --start-dir src "TODO"
+##   fg --dot-files -e json "api_key"
+fd () {
+    local fuzzy=0
+    local dotfiles_only=0
+    local start_dir=""
+    local has_file=""
+    local contains_text=""
+    local contains_regex=""
+    local max_depth=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -f|--fuzzy)
+                fuzzy=1; shift ;;
+            --dot-files)
+                dotfiles_only=1; shift ;;
+            --start-dir)
+                start_dir="$2"; shift 2 ;;
+            --start-dir=*)
+                start_dir="${1#*=}"; shift ;;
+            --has-file)
+                has_file="$2"; shift 2 ;;
+            --has-file=*)
+                has_file="${1#*=}"; shift ;;
+            -c|--contains)
+                contains_text="$2"; shift 2 ;;
+            --contains=*)
+                contains_text="${1#*=}"; shift ;;
+            --contains-regex)
+                contains_regex="$2"; shift 2 ;;
+            --contains-regex=*)
+                contains_regex="${1#*=}"; shift ;;
+            --max-depth)
+                max_depth="$2"; shift 2 ;;
+            --max-depth=*)
+                max_depth="${1#*=}"; shift ;;
+            --)
+                shift; break ;;
+            -*)
+                echo "Usage: fd [-f] [--dot-files] [--start-dir dir] [--has-file glob] [-c text] [--contains-regex re] [--max-depth N] [dir] <pattern>" >&2
+                return 1
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
+    local dir="."
+    local query=""
+
+    if [[ -n "$start_dir" ]]; then
+        dir="$start_dir"
+        query="${1:-*}"
+    else
+        if [[ $# -ge 2 ]]; then
+            dir="$1"; query="$2"
+        elif [[ $# -eq 1 ]]; then
+            dir="."
+            query="$1"
+        else
+            dir="."
+            query="*"
+        fi
+    fi
+
+    # Build directory name pattern
+    local pattern
+    if [[ $fuzzy -eq 1 && "$query" != "*" ]]; then
+        local chars
+        chars=$(printf '%s' "$query" | sed 's/./&*/g')
+        pattern="*${chars}"
+    else
+        pattern="*${query}*"
+    fi
+
+    local find_args=("$dir" -type d)
+
+    if [[ -n "$max_depth" ]]; then
+        find_args+=(-maxdepth "$max_depth")
+    fi
+
+    if [[ $dotfiles_only -eq 1 ]]; then
+        find_args+=(-path '*/.*')
+    fi
+
+    find_args+=(-iname "$pattern")
+
+    # If no secondary content/child-file filter, return directly
+    if [[ -z "$has_file" && -z "$contains_text" && -z "$contains_regex" ]]; then
+        find "${find_args[@]}"
+        return $?
+    fi
+
+    # Secondary inspection per matched directory
+    local target_dir
+    while IFS= read -r target_dir; do
+        [[ -z "$target_dir" ]] && continue
+
+        # Filter by presence of child file
+        if [[ -n "$has_file" ]]; then
+            local file_check
+            file_check=$(find "$target_dir" -maxdepth 1 -type f -name "$has_file" -print -quit 2>/dev/null)
+            [[ -z "$file_check" ]] && continue
+        fi
+
+        # Filter by file content within directory
+        if [[ -n "$contains_text" || -n "$contains_regex" ]]; then
+            local grep_args=(-q -r)
+            if [[ -n "$contains_text" ]]; then
+                grep_args+=(-F "$contains_text")
+            else
+                grep_args+=(-E "$contains_regex")
+            fi
+
+            if ! grep "${grep_args[@]}" "$target_dir" 2>/dev/null; then
+                continue
+            fi
+        fi
+
+        printf "%s\n" "$target_dir"
+    done < <(find "${find_args[@]}" 2>/dev/null)
+}
+
+
+## @description Locates parent directories that contain files matching a target string/regex, with optional filters for directory name globs or regexes.
+## @category Find
+## @arg $1 string [required] Target text or regular expression to locate inside child files.
+## @opt -r, --regex Treats the search query as an ERE regular expression (defaults to exact string matching).
+## @opt -i, --ignore-case Performs case-insensitive matching on child file contents.
+## @opt -n, --name <pattern> Filters matched directories using a directory name glob pattern (e.g., "*controllers*").
+## @opt -f, --fuzzy Enables fuzzy character matching when evaluating the directory name filter.
+## @opt --name-regex <regex> Filters matched directories where the directory basename matches an ERE regular expression.
+## @opt --dot-files Searches within hidden files and hidden directories (omitted by default).
+## @opt --start-dir <path> Root directory path to initiate file inspection (defaults to current directory ".").
+## @exitcode 0 If one or more directories containing matching content are found.
+## @exitcode 1 If no content keyword is supplied or no matching directories are identified.
+## @stderr Prints usage instructions when required arguments are missing or invalid options are encountered.
+## @example
+##   fdi "TODO"
+##   fdi -i "api_key"
+##   fdi -n "*auth*" "verifyToken"
+##   fdi -f -n "srv" "listenAndServe"
+##   fdi --dot-files "export AWS_"
+fdi () {
+    local is_regex=0
+    local ignore_case=0
+    local dotfiles=0
+    local fuzzy=0
+    local start_dir="."
+    local name_filter=""
+    local name_regex=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -r|--regex)
+                is_regex=1; shift ;;
+            -i|--ignore-case)
+                ignore_case=1; shift ;;
+            -f|--fuzzy)
+                fuzzy=1; shift ;;
+            -n|--name)
+                name_filter="$2"; shift 2 ;;
+            --name=*)
+                name_filter="${1#*=}"; shift ;;
+            --name-regex)
+                name_regex="$2"; shift 2 ;;
+            --name-regex=*)
+                name_regex="${1#*=}"; shift ;;
+            --dot-files)
+                dotfiles=1; shift ;;
+            --start-dir)
+                start_dir="$2"; shift 2 ;;
+            --start-dir=*)
+                start_dir="${1#*=}"; shift ;;
+            --)
+                shift; break ;;
+            -*)
+                echo "Usage: fdi [-r] [-i] [-f] [-n name] [--name-regex re] [--dot-files] [--start-dir dir] <keyword>" >&2
+                return 1
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
+    local keyword="${1:-}"
+    if [[ -z "$keyword" ]]; then
+        echo "Error: Search keyword/pattern required." >&2
+        return 1
+    fi
+
+    # Build find arguments for scoping candidate files
+    local find_args=("$start_dir" -type f)
+    if [[ $dotfiles -eq 0 ]]; then
+        find_args+=(-not -path '*/.*')
+    fi
+
+    # Build grep flags
+    local grep_flags=(-l)
+    [[ $ignore_case -eq 1 ]] && grep_flags+=(-i)
+
+    if [[ $is_regex -eq 1 ]]; then
+        grep_flags+=(-E "$keyword")
+    else
+        grep_flags+=(-F "$keyword")
+    fi
+
+    # Convert fuzzy name filter to wildcard if requested
+    if [[ -n "$name_filter" && $fuzzy -eq 1 ]]; then
+        local chars
+        chars=$(printf '%s' "$name_filter" | sed 's/./&*/g')
+        name_filter="*${chars}"
+    elif [[ -n "$name_filter" && "$name_filter" != *"*"* ]]; then
+        name_filter="*${name_filter}*"
+    fi
+
+    # Search file content, extract parent directory, deduplicate, and filter by dir name
+    find "${find_args[@]}" -print0 2>/dev/null \
+        | xargs -0 grep "${grep_flags[@]}" 2>/dev/null \
+        | awk -v n_filt="$name_filter" -v n_re="$name_regex" '
+            {
+                # Extract directory path
+                match($0, /^(.*)\/[^\/]+$/, arr)
+                dir = (arr[1] != "") ? arr[1] : "."
+
+                # Deduplicate directories
+                if (!seen[dir]++) {
+                    split(dir, parts, "/")
+                    dirname = parts[length(parts)]
+
+                    # Filter by directory regex if present
+                    if (n_re != "" && dirname !~ n_re) {
+                        next
+                    }
+
+                    # Filter by directory glob if present
+                    if (n_filt != "") {
+                        # Convert simple shell glob pattern to awk regex
+                        pat = n_filt
+                        gsub(/\./, "\\.", pat)
+                        gsub(/\*/, ".*", pat)
+                        gsub(/\?/, ".", pat)
+                        if (dirname !~ ("^" pat "$")) {
+                            next
+                        }
+                    }
+
+                    print dir
+                }
+            }'
+}
+
+
+
+
+findcfg() {
+  if [ -z "$1" ]; then
+    echo "Usage: findcfg <name>"
+    return 1
+  fi
+
+  local target="$1"
+  local search_roots=()
+
+  # Specific config directories
+  [ -d "/etc" ] && search_roots+=("/etc")
+  [ -d "$HOME/.config" ] && search_roots+=("$HOME/.config")
+  [ -d "$HOME/.local/share" ] && search_roots+=("$HOME/.local/share")
+  [ -d "$HOME/.vscode" ] && search_roots+=("$HOME/.vscode")
+
+  # 1. Search inside specific config directories (depth up to 5)
+  if [ ${#search_roots[@]} -gt 0 ]; then
+    find "${search_roots[@]}" -maxdepth 5 \
+      \( -name ".git" -o -name "node_modules" -o -name ".cache" -o -name "Trash" \) -prune -o \
+      -type f \
+      -ipath "*$target*" \
+      \( \
+        -iname "*.conf"  -o \
+        -iname "*.yaml"  -o \
+        -iname "*.yml"   -o \
+        -iname "*.toml"  -o \
+        -iname "*.json"  -o \
+        -iname "*.ini"   -o \
+        -iname "*rc"     -o \
+        -iname "*.cfg"   -o \
+        -iname "*.pbtxt" \
+      \) -print 2>/dev/null
+  fi
+
+  # 2. Search top-level dotfiles directly in $HOME (depth 1 only)
+  find "$HOME" -maxdepth 1 -type f \
+    -iname ".*$target*" \
+    \( \
+      -iname "*rc"     -o \
+      -iname "*.conf"  -o \
+      -iname "*.yaml"  -o \
+      -iname "*.yml"   -o \
+      -iname "*.toml"  -o \
+      -iname "*.json"  -o \
+      -iname "*.ini"   -o \
+      -iname "*.cfg"   -o \
+      -iname "*.pbtxt" -o \
+      -iname ".*profile" -o \
+      -iname ".bash*"  -o \
+      -iname ".zsh*" \
+    \) -print 2>/dev/null
+}
+
+## @description Locates common Linux configuration, data, and file manager script directories.
+##              If no search key or target is passed, displays an interactive selection menu.
+## @category Find
+## @arg -c Optional flag to change directory (cd) to the target path upon resolution.
+## @arg $1 string Optional directory key or name to resolve directly (e.g. config, data, nautilus).
+## @exitcode 0 If the directory is found (and navigated to, if -c was specified).
+## @exitcode 1 If an unknown option is passed, an invalid selection is made, or the target path does not exist.
+## @stderr Prints error messages if flags are invalid or target directories cannot be found.
+## @example
+##   fcfg
+##   fcfg -c
+##   fcfg config
+##   fcfg -c nemo-python
+## @see find(1)
+## @see cd(1)
+fcfg() {
+  local do_cd=0
+  local target_key=""
+
+  # Parse optional flags
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -c|--cd)
+        do_cd=1
+        shift
+        ;;
+      -*)
+        printf 'fcfg: unknown option: %s\n' "$1" >&2
+        return 1
+        ;;
+      *)
+        target_key="$1"
+        shift
+        ;;
+    esac
+  done
+
+  local target_path=""
+
+  # If no positional key is given, show an interactive selection menu
+  if [[ -z "$target_key" ]]; then
+    local options=(
+      "Config ($HOME/.config)"
+      "Data ($HOME/.local/share)"
+      "Nautilus scripts ($HOME/.local/share/nautilus/scripts)"
+      "Nautilus Python scripts ($HOME/.local/share/nautilus-python/extensions)"
+      "Nemo scripts ($HOME/.local/share/nemo/scripts)"
+      "Nemo Python scripts ($HOME/.local/share/nemo-python/extensions)"
+      "Quit"
+    )
+
+    printf 'Select a directory target:\n'
+    local opt
+    select opt in "${options[@]}"; do
+      case "$opt" in
+        "Config ($HOME/.config)")
+          target_path="${XDG_CONFIG_HOME:-$HOME/.config}"
+          break
+          ;;
+        "Data ($HOME/.local/share)")
+          target_path="${XDG_DATA_HOME:-$HOME/.local/share}"
+          break
+          ;;
+        "Nautilus scripts ($HOME/.local/share/nautilus/scripts)")
+          target_path="${XDG_DATA_HOME:-$HOME/.local/share}/nautilus/scripts"
+          break
+          ;;
+        "Nautilus Python scripts ($HOME/.local/share/nautilus-python/extensions)")
+          target_path="${XDG_DATA_HOME:-$HOME/.local/share}/nautilus-python/extensions"
+          break
+          ;;
+        "Nemo scripts ($HOME/.local/share/nemo/scripts)")
+          target_path="${XDG_DATA_HOME:-$HOME/.local/share}/nemo/scripts"
+          break
+          ;;
+        "Nemo Python scripts ($HOME/.local/share/nemo-python/extensions)")
+          target_path="${XDG_DATA_HOME:-$HOME/.local/share}/nemo-python/extensions"
+          break
+          ;;
+        "Quit")
+          return 0
+          ;;
+        *)
+          printf 'Invalid selection. Please choose 1-%d.\n' "${#options[@]}" >&2
+          ;;
+      esac
+    done
+  else
+    # Map direct CLI keys
+    case "$target_key" in
+      config)
+        target_path="${XDG_CONFIG_HOME:-$HOME/.config}"
+        ;;
+      data)
+        target_path="${XDG_DATA_HOME:-$HOME/.local/share}"
+        ;;
+      nautilus|nautilus-scripts)
+        target_path="${XDG_DATA_HOME:-$HOME/.local/share}/nautilus/scripts"
+        ;;
+      nautilus-python)
+        target_path="${XDG_DATA_HOME:-$HOME/.local/share}/nautilus-python/extensions"
+        ;;
+      nemo|nemo-scripts)
+        target_path="${XDG_DATA_HOME:-$HOME/.local/share}/nemo/scripts"
+        ;;
+      nemo-python)
+        target_path="${XDG_DATA_HOME:-$HOME/.local/share}/nemo-python/extensions"
+        ;;
+      *)
+        printf 'fcfg: unknown directory target "%s"\n' "$target_key" >&2
+        printf 'Available targets: config, data, nautilus, nautilus-python, nemo, nemo-python\n' >&2
+        return 1
+        ;;
+    esac
+  fi
+
+  # Verify target path exists
+  if [[ ! -d "$target_path" ]]; then
+    printf 'fcfg: directory does not exist: %s\n' "$target_path" >&2
+    return 1
+  fi
+
+  # Output path or change directory
+  if [[ "$do_cd" -eq 1 ]]; then
+    cd "$target_path" || return 1
+    printf 'Changed directory to: %s\n' "$PWD"
+  else
+    printf '%s\n' "$target_path"
+  fi
+}
 
 
 # SSH Related Functions
@@ -226,7 +1094,68 @@ new_deploy_key() {
     echo "=========================================="
     echo " Success! Here is your PUBLIC key:"
     echo "=========================================="
+    cat -p "${key_path}.pub" 
+    
+    echo "=========================================="
+    echo "Private key saved to: $key_path"
+}
+
+## @description Generates a new Ed25519 SSH deploy key named <name>_deploy_key and copies its public key to the clipboard.
+## @description Stores the key under ~/.ssh/deploy-keys.
+## @category SSH
+## @arg $1 string The name for the key; the file becomes ${NAME}_deploy_key.
+## @exitcode 0 If the key is generated (clipboard copy is best-effort).
+## @exitcode 1 If no name is supplied, the key already exists, or key generation fails.
+## @stdout Prints the public key and private key location.
+## @example
+##   create_deploy_key myproject   # -> ~/.ssh/deploy-keys/myproject_deploy_key
+## @see ssh-keygen(1)
+create_deploy_key() {
+    local name="$1"
+    if [ -z "$name" ]; then
+        echo "Usage: create_deploy_key <name>" >&2
+        return 1
+    fi
+
+    local key_dir="$HOME/.ssh/deploy-keys"
+    local key_path="$key_dir/${name}_deploy_key"
+
+    mkdir -p "$key_dir" && chmod 700 "$key_dir"
+
+    if [ -e "$key_path" ]; then
+        echo "Error: Key already exists at $key_path" >&2
+        return 1
+    fi
+
+    ssh-keygen -t ed25519 -C "${name}_deploy_key@$(hostname)" -f "$key_path" -N "" -q || {
+        echo "Error: ssh-keygen failed." >&2
+        return 1
+    }
+    chmod 600 "$key_path"
+
+    echo "Public key (${key_path}.pub):"
     cat "${key_path}.pub"
+
+# Copy to clipboard across common environments (Wayland, X11, macOS, WSL)
+    if command -v wl-copy >/dev/null 2>&1; then
+        wl-copy < "${key_path}.pub"
+        echo "(Copied to clipboard via wl-copy)"
+    elif command -v xclip >/dev/null 2>&1; then
+        xclip -selection clipboard < "${key_path}.pub"
+        echo "(Copied to clipboard via xclip)"
+    elif command -v xsel >/dev/null 2>&1; then
+        xsel --clipboard --input < "${key_path}.pub"
+        echo "(Copied to clipboard via xsel)"
+    elif command -v pbcopy >/dev/null 2>&1; then
+        pbcopy < "${key_path}.pub"
+        echo "(Copied to clipboard via pbcopy)"
+    elif command -v clip.exe >/dev/null 2>&1; then
+        clip.exe < "${key_path}.pub"
+        echo "(Copied to clipboard via clip.exe)"
+    else
+        echo "(Warning: No clipboard utility found. Install xclip, wl-clipboard, or xsel.)"
+    fi
+
     echo "=========================================="
     echo "Private key saved to: $key_path"
 }
@@ -324,4 +1253,429 @@ addcommitpush() {
       echo "Commit created locally; push skipped."
       ;;
   esac
+}
+
+
+## @description Opens a file from a configurable list with multiple actions.
+## @description Reads file entries from ~/.config/edit-files.conf (format: description|path).
+## @description Actions: Edit, Copy Content, Copy Path, Insert Line.
+## @category Navigation
+## @exitcode 0 If an action is successfully completed or the user cancels.
+## @exitcode 1 If the config file is missing or no valid entries are found.
+## @stdin Prompts for file and action selection from interactive menus.
+## @stdout Prints the menus and status messages.
+## @stderr Prints error messages if the config file is missing or invalid.
+## @example
+##   edit
+## @see select(1)
+## @see ${EDITOR}
+edit() {
+  local config_file="${XDG_CONFIG_HOME:-$HOME/.config}/edit-files.conf"
+  
+  if [ ! -f "$config_file" ]; then
+    echo "Error: Config file not found: $config_file" >&2
+    echo "Create it with entries in the format: description|path" >&2
+    return 1
+  fi
+
+  local -a descriptions=()
+  local -a paths=()
+  local line desc path
+
+  while IFS='|' read -r desc path; do
+    # Skip comments and empty lines
+    [[ "$desc" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "$desc" || -z "$path" ]] && continue
+    
+    # Expand ~ to $HOME
+    path="${path/#\~/$HOME}"
+    
+    descriptions+=("$desc")
+    paths+=("$path")
+  done < "$config_file"
+
+  if [ ${#descriptions[@]} -eq 0 ]; then
+    echo "Error: No valid entries found in $config_file" >&2
+    return 1
+  fi
+
+  # Add Quit option
+  descriptions+=("Quit")
+
+  echo "Select a file:"
+  local opt
+  select opt in "${descriptions[@]}"; do
+    case "$opt" in
+      "Quit")
+        return 0
+        ;;
+      "")
+        echo "Invalid selection. Please choose 1-${#descriptions[@]}." >&2
+        ;;
+      *)
+        # Find the index of the selection
+        local idx=$((REPLY - 1))
+        if [ $idx -ge 0 ] && [ $idx -lt $((${#descriptions[@]} - 1)) ]; then
+          local file_path="${paths[$idx]}"
+          
+          if [ ! -f "$file_path" ]; then
+            echo "Error: File not found: $file_path" >&2
+            return 1
+          fi
+
+          # Show action submenu
+          echo
+          echo "File: $opt"
+          echo "Path: $file_path"
+          echo
+          local -a actions=("Edit" "Copy Content" "Copy Path" "Insert Line" "Back")
+          local action
+          select action in "${actions[@]}"; do
+            case "$action" in
+              "Edit")
+                local editor="${EDITOR:-}"
+                if [ -z "$editor" ]; then
+                  if command -v code >/dev/null 2>&1; then
+                    editor="code"
+                  elif command -v vim >/dev/null 2>&1; then
+                    editor="vim"
+                  elif command -v nano >/dev/null 2>&1; then
+                    editor="nano"
+                  else
+                    echo "Error: No editor found. Set \$EDITOR environment variable." >&2
+                    return 1
+                  fi
+                fi
+                echo "Opening in $editor..."
+                "$editor" "$file_path"
+                return 0
+                ;;
+              "Copy Content")
+                if command -v wl-copy >/dev/null 2>&1; then
+                  wl-copy < "$file_path"
+                  echo "Content copied to clipboard."
+                elif command -v xclip >/dev/null 2>&1; then
+                  xclip -selection clipboard < "$file_path"
+                  echo "Content copied to clipboard."
+                elif command -v xsel >/dev/null 2>&1; then
+                  xsel --clipboard < "$file_path"
+                  echo "Content copied to clipboard."
+                else
+                  echo "Error: wl-copy, xclip, or xsel required to copy to clipboard." >&2
+                  return 1
+                fi
+                return 0
+                ;;
+              "Copy Path")
+                if command -v wl-copy >/dev/null 2>&1; then
+                  echo -n "$file_path" | wl-copy
+                  echo "Path copied to clipboard."
+                elif command -v xclip >/dev/null 2>&1; then
+                  echo -n "$file_path" | xclip -selection clipboard
+                  echo "Path copied to clipboard."
+                elif command -v xsel >/dev/null 2>&1; then
+                  echo -n "$file_path" | xsel --clipboard
+                  echo "Path copied to clipboard."
+                else
+                  echo "Error: wl-copy, xclip, or xsel required to copy to clipboard." >&2
+                  return 1
+                fi
+                return 0
+                ;;
+              "Insert Line")
+                local line_num line_content
+                read -r -e -p "Line number to insert at: " line_num
+                if ! [[ "$line_num" =~ ^[0-9]+$ ]]; then
+                  echo "Error: Invalid line number." >&2
+                  return 1
+                fi
+                read -r -e -p "Content to insert: " line_content
+                if [ -z "$line_content" ]; then
+                  echo "Error: No content provided." >&2
+                  return 1
+                fi
+                # Insert the line at the specified position
+                sed -i "${line_num}i\\${line_content}" "$file_path"
+                echo "Line inserted at position $line_num."
+                return 0
+                ;;
+              "Back")
+                echo
+                echo "Select a file:"
+                break
+                ;;
+              "")
+                echo "Invalid action. Please choose 1-${#actions[@]}." >&2
+                ;;
+            esac
+          done
+          # If we broke out of the action loop, continue the file selection loop
+          continue
+        fi
+        ;;
+    esac
+  done
+}
+
+
+## @description Navigates to or inspects directories from a configurable list.
+## @description Reads directory entries from ~/.config/dir_locations (format: description|path).
+## @description Actions: Show Path, Copy Path, cd, List Contents.
+## @category Navigation
+## @exitcode 0 If an action is successfully completed or the user cancels.
+## @exitcode 1 If the config file is missing or no valid entries are found.
+## @stdin Prompts for directory and action selection from interactive menus.
+## @stdout Prints the menus, status messages, and directory listings.
+## @stderr Prints error messages if the config file is missing or invalid.
+## @example
+##   find_dir
+## @see select(1)
+## @see cd(1)
+## @see ls(1)
+find_dir() {
+  local config_file="${XDG_CONFIG_HOME:-$HOME/.config}/dir_locations"
+  
+  if [ ! -f "$config_file" ]; then
+    echo "Error: Config file not found: $config_file" >&2
+    echo "Create it with entries in the format: description|path" >&2
+    return 1
+  fi
+
+  local -a descriptions=()
+  local -a paths=()
+  local desc path
+
+  while IFS='|' read -r desc path; do
+    # Skip comments and empty lines
+    [[ "$desc" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "$desc" || -z "$path" ]] && continue
+    
+    # Expand ~ to $HOME
+    path="${path/#\~/$HOME}"
+    
+    descriptions+=("$desc")
+    paths+=("$path")
+  done < "$config_file"
+
+  if [ ${#descriptions[@]} -eq 0 ]; then
+    echo "Error: No valid entries found in $config_file" >&2
+    return 1
+  fi
+
+  # Add Quit option
+  descriptions+=("Quit")
+
+  echo "Select a directory:"
+  local opt
+  select opt in "${descriptions[@]}"; do
+    case "$opt" in
+      "Quit")
+        return 0
+        ;;
+      "")
+        echo "Invalid selection. Please choose 1-${#descriptions[@]}." >&2
+        ;;
+      *)
+        # Find the index of the selection
+        local idx=$((REPLY - 1))
+        if [ $idx -ge 0 ] && [ $idx -lt $((${#descriptions[@]} - 1)) ]; then
+          local dir_path="${paths[$idx]}"
+          
+          if [ ! -d "$dir_path" ]; then
+            echo "Error: Directory not found: $dir_path" >&2
+            return 1
+          fi
+
+          # Show action submenu
+          echo
+          echo "Directory: $opt"
+          echo "Path: $dir_path"
+          echo
+          local -a actions=("Show Path" "Copy Path" "cd to Directory" "List Contents" "Back")
+          local action
+          select action in "${actions[@]}"; do
+            case "$action" in
+              "Show Path")
+                echo "$dir_path"
+                return 0
+                ;;
+              "Copy Path")
+                if command -v wl-copy >/dev/null 2>&1; then
+                  echo -n "$dir_path" | wl-copy
+                  echo "Path copied to clipboard."
+                elif command -v xclip >/dev/null 2>&1; then
+                  echo -n "$dir_path" | xclip -selection clipboard
+                  echo "Path copied to clipboard."
+                elif command -v xsel >/dev/null 2>&1; then
+                  echo -n "$dir_path" | xsel --clipboard
+                  echo "Path copied to clipboard."
+                else
+                  echo "Error: wl-copy, xclip, or xsel required to copy to clipboard." >&2
+                  return 1
+                fi
+                return 0
+                ;;
+              "cd to Directory")
+                echo "Changing to $dir_path..."
+                cd "$dir_path" || return 1
+                echo "Current directory: $PWD"
+                return 0
+                ;;
+              "List Contents")
+                echo "Contents of $dir_path:"
+                echo
+                ls -la "$dir_path"
+                return 0
+                ;;
+              "Back")
+                echo
+                echo "Select a directory:"
+                break
+                ;;
+              "")
+                echo "Invalid action. Please choose 1-${#actions[@]}." >&2
+                ;;
+            esac
+          done
+          # If we broke out of the action loop, continue the directory selection loop
+          continue
+        fi
+        ;;
+    esac
+  done
+}
+
+## @description Lists the packages installed with apt, newest transactions last, read from apt's history logs.
+## @category System
+## @arg $1 integer Optional number of transactions to show. Defaults to 20.
+## @exitcode 0 If the history was read.
+## @exitcode 1 If no apt history logs were found.
+## @exitcode 2 If the argument is not a positive integer.
+## @stderr Prints usage information when the argument is invalid.
+## @example
+##   apt_recent
+##   apt_recent 50
+## @see /var/log/apt/history.log
+apt_recent() {
+  local count="${1:-20}"
+  case "$count" in
+    ''|0|*[!0-9]*)
+      printf 'Usage: apt_recent [positive-integer]\n' >&2
+      return 2
+      ;;
+  esac
+
+  local logs
+  logs="$(ls -1tr /var/log/apt/history.log* 2>/dev/null)"
+  if [ -z "$logs" ]; then
+    printf 'No apt history logs found in /var/log/apt/.\n' >&2
+    return 1
+  fi
+
+  printf '%s\n' "$logs" | while IFS= read -r f; do zcat -f -- "$f"; done \
+    | awk -v n="$count" '
+      function flush() {
+        if (date == "") return
+        if (pkgs != "" || cmd ~ /install/) {
+          k++
+          rec[k] = date "  " cmd "\n" pkgs
+        }
+        date = ""; cmd = ""; pkgs = ""
+      }
+      /^Start-Date:/  { flush(); date = substr($0, 13); next }
+      /^Commandline:/ { cmd = substr($0, 14); next }
+      /^Install:/ {
+        s = substr($0, 10)
+        while (match(s, /[^ ,]+ \([^)]*\)/)) {
+          item = substr(s, RSTART, RLENGTH)
+          s = substr(s, RSTART + RLENGTH)
+          if (item ~ /automatic/) continue
+          name = item; sub(/[: ].*/, "", name)
+          ver = item; sub(/^[^(]*\(/, "", ver); sub(/\)$/, "", ver)
+          pkgs = pkgs "    " name " " ver "\n"
+        }
+        next
+      }
+      END {
+        flush()
+        start = k - n + 1; if (start < 1) start = 1
+        for (i = start; i <= k; i++) printf "%s\n", rec[i]
+      }'
+}
+
+# Enable a module in home/.chezmoidata/modules.toml, then review and apply it with chezmoi.
+# usage: module_enable <name> [description]
+module_enable() {
+  local name="" description=""
+  if [[ $# -lt 1 ]]; then
+    echo "usage: module_enable <name> [description]" >&2
+    return 1
+  fi
+  name="$1"
+  description="${2:-}"
+  if [[ ! "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    echo "module name may only contain letters, digits, _ and -" >&2
+    return 1
+  fi
+
+  local toml
+  toml="$(chezmoi source-path 2>/dev/null)/.chezmoidata/modules.toml"
+  if [[ ! -f "$toml" ]]; then
+    echo "modules.toml not found at: $toml" >&2
+    return 1
+  fi
+
+  if grep -qx "\[modules\.${name}\]" "$toml"; then
+    # Flip enabled inside this module's section only.
+    awk -v section="[modules.${name}]" '
+      $0 == section { in_section = 1; print; next }
+      /^\[/ { in_section = 0 }
+      in_section && /^enabled[[:space:]]*=/ { print "enabled = true"; next }
+      { print }
+    ' "$toml" > "$toml.tmp" && mv "$toml.tmp" "$toml"
+    echo "enabled [modules.${name}] in $toml"
+  else
+    printf '\n[modules.%s]\nenabled = true\ndescription = "%s"\n' "$name" "$description" >> "$toml"
+    echo "added [modules.${name}] (enabled) to $toml"
+  fi
+
+  echo "next: review with 'chezmoi diff', then run 'chezmoi apply'"
+}
+
+
+# Send every EPUB and PDF under a folder to Calibre-Web Automated's ingest folder.
+## @category Books
+## @description Find EPUB/PDF files in a directory (recursively) and sync them to the Calibre-Web ingest folder on the Coolify server
+## @usage booksync <input-dir>
+## @arg $1 string Directory to search for .epub and .pdf files
+## @env BOOKSYNC_HOST SSH host (default: ubuntu)
+## @env BOOKSYNC_DEST Remote ingest folder (default: Calibre-Web Automated ingest path)
+## @exitcode 0 Files synced, or nothing to sync
+## @exitcode 2 Missing or invalid directory
+## @requires rsync ssh
+## @example booksync ~/Downloads
+booksync() {
+  if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
+    printf 'Usage: booksync <input-dir>\n' >&2
+    return 2
+  fi
+  local host="${BOOKSYNC_HOST:-ubuntu}"
+  local dest="${BOOKSYNC_DEST:-/data/coolify/services/zasa4e9e35keppj05qquxxsx/srv/ebooks}"
+  local count
+  count=$(find "$1" -type f \( -iname '*.epub' -o -iname '*.pdf' \) | wc -l)
+  if [ "$count" -eq 0 ]; then
+    printf 'No EPUB or PDF files found in %s\n' "$1"
+    return 0
+  fi
+  printf 'Syncing %s book(s) to %s:%s\n' "$count" "$host" "$dest"
+  (
+    cd "$1" || exit 2
+    find . -type f \( -iname '*.epub' -o -iname '*.pdf' \) -print0 |
+      rsync -av --progress --from0 --files-from=- --no-relative --ignore-existing . "$host:$dest/"
+  )
+}
+
+# rhermes: open the remote standalone Hermes chat on the Coolify server
+rhermes() {
+  ssh -t "${RHERMES_HOST:-ubuntu}" docker exec -it "${RHERMES_CONTAINER:-hermes-agent-y124dk9qvl15g6gshv4h1tk9}" hermes "${@:-chat}"
 }

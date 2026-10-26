@@ -1,0 +1,13 @@
+{{- /* Role extras: source ~/.dotfiles/<role>/ files in fixed order, each only if present.
+       env -> aliases -> functions -> chezmoi-helpers.aliases -> chezmoi-helpers.functions
+       Only the matching role directory is applied (.chezmoiignore.tmpl), so role=local loads
+       local/ and role=remote loads remote/. remote/remote_helpers.sh is loaded by modules/docker.
+       Expected context: root data dict (.role).
+*/ -}}
+{{- if has .role (list "local" "remote") }}
+# role: {{ .role }} (env -> aliases -> functions -> chezmoi-helpers.aliases -> chezmoi-helpers.functions)
+for _df in env aliases functions chezmoi-helpers.aliases chezmoi-helpers.functions; do
+  _df_source "${DF_DIR}/{{ .role }}/${_df}"
+done
+unset _df
+{{- end }}

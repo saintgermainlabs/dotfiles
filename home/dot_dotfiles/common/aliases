@@ -1,9 +1,27 @@
 # Common aliases (bash and zsh).
 
-# Return success when a command is installed.
+# Return success when a command is installed (used below at load time; defined once, here).
+## @description Checks whether a command is available in the current PATH.
+## @category Helpers
+## @arg $1 string The command name to check.
+## @exitcode 0 If the command is installed and available.
+## @exitcode 1 If the command cannot be found.
+## @see command(1)
 has() {
   command -v "$1" >/dev/null 2>&1
 }
+
+# Install packages with apt.
+## @category Helpers
+## @description Install packages with apt (prompts for sudo)
+## @usage install <package>...
+## @see apt(8)
+alias install='sudo apt install'
+# Close the current shell.
+## @category Helpers
+## @description Exit the current shell session
+## @usage e
+alias e='exit'
 
 # File system — prefer eza when available.
 if has eza; then
@@ -210,3 +228,20 @@ if has lazydocker; then
   ## @see lazydocker(1)
   alias lzd='lazydocker'
 fi
+
+# Security.
+# Generate a strong random password.
+## @category Security
+## @description Generate a strong random 32-byte password, base64 encoded
+## @usage strong_pass
+## @requires openssl
+## @see openssl-rand(1)
+alias strong_pass='openssl rand -base64 32'
+
+
+
+# Security.
+
+alias apt_i='sudo add install'
+alias apt_ui='sudo apt update && apt install'
+alias rm_repo='sudo add-apt-repository --remove'

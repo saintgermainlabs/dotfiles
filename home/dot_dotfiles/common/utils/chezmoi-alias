@@ -1,0 +1,65 @@
+## @description Appends an annotated alias to the end of dot_dotfiles/common/aliases (the file the shell loads for every host).
+## @category Chezmoi
+## @arg $1 string The alias name. Must start with a letter or underscore and must not already be defined in the file.
+## @arg $2 string The command the alias runs.
+## @arg $3 string Optional one-line description for the manual. Defaults to "Runs COMMAND".
+## @option --category NAME Manual category for the alias. Defaults to Shell.
+## @exitcode 0 If the alias was appended.
+## @exitcode 1 If the alias already exists or the file cannot be found or written.
+## @exitcode 2 If the arguments are missing or invalid.
+## @stderr Prints usage information or the reason for failure.
+## @example
+##   chezmoi_add_alias gs 'git status -sb'
+##   chezmoi_add_alias --category Git gp 'git pull --rebase' "Pull with rebase"
+## @see chezmoi source-path(1)
+chezmoi_add_alias() {
+  local category="Shell"
+  if [ "${1:-}" = "--category" ]; then
+    [ "$#" -ge 2 ] || { printf 'Usage: chezmoi_add_alias [--category NAME] NAME COMMAND [DESCRIPTION]\n' >&2; return 2; }
+    category="$2"
+    shift 2
+  fi
+
+  if [ "$#" -lt 2 ] || [ "$#" -gt 3 ] || [ -z "$1" ] || [ -z "$2" ]; then
+    printf 'Usage: chezmoi_add_alias [--category NAME] NAME COMMAND [DESCRIPTION]\n' >&2
+    return 2
+  fi
+
+  local name="$1" command="$2" description="${3:-Runs ${2}}"
+  if ! printf '%s\n' "$name" | grep -Eq '^[A-Za-z_][A-Za-z0-9_-]*$'; then
+    printf 'Error: invalid alias name: %s\n' "$name" >&2
+    return 2
+  fi
+
+  local source_dir file
+  source_dir="$(chezmoi source-path)" || return 1
+  file="${source_dir}/dot_dotfiles/common/aliases"
+  if [ ! -w "$file" ]; then
+    printf 'Error: cannot write %s\n' "$file" >&2
+    return 1
+  fi
+
+  if grep -Eq "^[[:space:]]*alias[[:space:]]+${name}=" "$file"; then
+    printf 'Error: alias %s is already defined in %s\n' "$name" "$file" >&2
+    return 1
+  fi
+
+  # Single-quoted shell value: a literal ' becomes '\'' .
+  local escaped="${command//\'/\'\\\'\'}"
+
+  # Make sure the new block starts on its own line, with a blank line before it.
+  if [ -s "$file" ]; then
+    if [ -n "$(tail -c 1 "$file")" ]; then
+      printf '\n' >> "$file"
+    fi
+    printf '\n' >> "$file"
+  fi
+  {
+    printf '# %s\n' "$description"
+    printf '## @category %s\n' "$category"
+    printf '## @description %s\n' "$description"
+    printf '## @usage %s\n' "$name"
+    printf "alias %s='%s'\n" "$name" "$escaped"
+  } >> "$file" || return 1
+  printf 'Added alias %s to %s\n' "$name" "$file"
+}

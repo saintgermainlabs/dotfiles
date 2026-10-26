@@ -1,0 +1,9 @@
+# Loader config for the extras module — read by _df_load_module (~/.dotfiles/common/helpers.sh).
+# Order: env (set -a) -> files -> interactive -> bash|zsh. Paths are relative to this dir.
+# extras: scan-yaml.sh is a standalone script (set -e), so nothing is sourced.
+
+[bootstrap]
+files = []
+interactive = []
+bash = []
+zsh = []

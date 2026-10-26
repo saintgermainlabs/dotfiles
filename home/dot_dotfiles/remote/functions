@@ -61,14 +61,6 @@ knowledge-git() {
 }
 
 
-obsidian-git() {
-    git \
-        --git-dir="$HOME/.git-repos/obsidian.git" \
-        --work-tree="/srv/obsidian" \
-        "$@"
-}
-
-
 
 
 find_openclaw_dir() {
@@ -93,4 +85,103 @@ find_openclaw_dir() {
             echo "------------------------------------------------"
         fi
     done
+}
+
+
+
+obsidian-git() {
+    git \
+        --git-dir="$HOME/.git-repos/obsidian.git" \
+        --work-tree="/srv/data/obsidian-vault" \
+        "$@"
+}
+
+
+
+# Scan docker-compose.yml files and generate a YAML inventory of stacks.
+# Usage: compose-image-inventory [directory] [output.yml]
+cii() {
+    local root="${1:-.}"
+    local output="${2:-stacks.yml}"
+    local tmp
+
+    command -v rg >/dev/null 2>&1 || {
+        echo "Error: ripgrep (rg) is required." >&2
+        return 1
+    }
+
+    command -v python3 >/dev/null 2>&1 || {
+        echo "Error: python3 is required." >&2
+        return 1
+    }
+
+    tmp=$(mktemp) || return 1
+
+    # Find image declarations, retaining the Compose file path.
+    if ! rg -s --glob '**/docker-compose.yml' \
+        '^\s*image:\s*(.*)' -r '$1' "$root" \
+        --with-filename > "$tmp"; then
+        rm -f "$tmp"
+        echo "No image declarations found." >&2
+        return 1
+    fi
+
+    python3 - "$tmp" "$output" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1])
+destination = Path(sys.argv[2])
+
+stacks = {}
+
+for line in source.read_text().splitlines():
+    # rg --with-filename prints: filename:matched-text
+    try:
+        filename, image = line.split(":", 1)
+    except ValueError:
+        continue
+
+    image = image.strip().strip("'\"")
+    if not image or image.startswith("$"):
+        continue
+
+    # Remove a possible variable interpolation or digest/tag.
+    image_name = image.split("@", 1)[0].split(":", 1)[0].rstrip("/")
+    principal = image_name.rsplit("/", 1)[-1].lower()
+
+    # Strip common image prefixes where the stack name is embedded.
+    principal = re.sub(r"^(?:docker-)?", "", principal)
+
+    # For example, lscr.io/linuxserver/nextcloud -> nextcloud.
+    # The final image component is normally the most useful identifier.
+    stack = re.sub(r"[^a-z0-9_-]+", "-", principal).strip("-")
+
+    if not stack:
+        continue
+
+    stacks.setdefault(stack, {
+        "image": image,
+        "compose_file": filename,
+    })
+
+def quote(value):
+    # JSON double-quoted strings are valid YAML strings.
+    import json
+    return json.dumps(str(value))
+
+lines = ["stacks:"]
+for name, details in sorted(stacks.items()):
+    lines.append(f"  {quote(name)}:")
+    lines.append(f"    image: {quote(details['image'])}")
+    lines.append(f"    compose_file: {quote(details['compose_file'])}")
+
+destination.write_text("\n".join(lines) + "\n")
+print(f"Wrote {len(stacks)} stacks to {destination}")
+PY
+
+    local status=$?
+    rm -f "$tmp"
+    return "$status"
 }

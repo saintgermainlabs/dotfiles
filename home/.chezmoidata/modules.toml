@@ -19,12 +19,12 @@ requires_gui = true
 description = "MIME defaults and other desktop config"
 
 [modules.nautilus]
-enabled = true
+enabled = false
 requires_gui = true
 description = "Nautilus templates, config, and cfgnunes scripts"
 
 [modules.nautilus_extensions]
-enabled = true
+enabled = false
 requires_gui = true
 description = "ToFpon Nautilus Python extensions (PPA manifest; provisioner installs)"
 
@@ -64,3 +64,10 @@ description = "Functions for managing remote server locally."
 [modules.coolify-manager]
 enabled = true
 description = "Coolify CLI helpers for finding and inspecting apps/services"
+
+[modules.extras]
+enabled = true
+description = "Miscellaneous extras"
+[modules.tailscale]
+enabled = true
+description = "Tailscale helpers and profile switching"

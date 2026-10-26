@@ -1,0 +1,19 @@
+ts_switch() {
+  if [[ ! "$1" =~ ^[0-9]+$ ]]; then
+    echo "usage: ts_switch <number>" >&2
+    return 1
+  fi
+
+  local id
+  id=$(tailscale switch --list | awk -v n="$1" 'NR>1 && NF { if (++c == n) { print $1; exit } }')
+
+  if [[ -z "$id" ]]; then
+    echo "No profile #$1. Available profiles:" >&2
+    tailscale switch --list >&2
+    return 1
+  fi
+
+  tailscale switch "$id"
+}
+
+

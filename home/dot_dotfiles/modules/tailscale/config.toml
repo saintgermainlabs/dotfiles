@@ -1,0 +1,8 @@
+# Loader config for the tailscale module — read by _df_load_module (~/.dotfiles/common/helpers.sh).
+# Order: env (set -a) -> files -> interactive -> bash|zsh. Paths are relative to this dir.
+
+[bootstrap]
+files = ["aliases.sh", "functions"]
+interactive = []
+bash = []
+zsh = []

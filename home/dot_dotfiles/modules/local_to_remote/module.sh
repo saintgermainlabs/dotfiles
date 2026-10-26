@@ -1,6 +1,7 @@
 # shellcheck shell=bash
 #
-# Local-to-remote helpers — source from Bash or Zsh.
+# Metadata only — read by `manual` (common/help). NOT sourced.
+# What gets loaded, and in which order, lives in config.toml [bootstrap].
 
 ## @module local_to_remote
 ## @title Local to Remote
@@ -10,31 +11,3 @@
 ## @requires rsync
 ## @tags ssh remote rsync upload download server config edit
 ## @source local_to_remote.sh
-
-if [ -n "${BASH_VERSION:-}" ]; then
-  _ltr_module_file="${BASH_SOURCE[0]}"
-elif [ -n "${ZSH_VERSION:-}" ]; then
-  # shellcheck disable=SC2296
-  _ltr_module_file="${(%):-%N}"
-else
-  _ltr_module_file="$0"
-fi
-
-_ltr_module_dir="$(
-  CDPATH= cd -- "$(dirname -- "$_ltr_module_file")" && pwd
-)"
-
-# shellcheck source=local_to_remote.sh
-. "$_ltr_module_dir/local_to_remote.sh"
-
-# Interactive-only tab completions.
-case $- in
-  *i*)
-    # shellcheck source=completions.bash
-    [ -r "$_ltr_module_dir/completions.bash" ] && . "$_ltr_module_dir/completions.bash"
-    # shellcheck source=completions.zsh
-    [ -r "$_ltr_module_dir/completions.zsh" ] && . "$_ltr_module_dir/completions.zsh"
-    ;;
-esac
-
-unset _ltr_module_file _ltr_module_dir

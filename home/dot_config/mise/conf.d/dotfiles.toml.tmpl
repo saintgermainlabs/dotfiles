@@ -20,8 +20,12 @@ vault = "latest"
 jq = "latest"
 {{- end }}
 [env]
+# Secrets (not in git): see ~/.dotfiles/secrets.env.example. Missing file is ignored.
+_.file = { path = "{{ .chezmoi.homeDir }}/.config/secrets/.env", redact = true }
+UNIVERSAL_AGENT_WORKSPACE="/home/god/Agents/universal-agent-workspace"
 {{- if eq .role "local" }}
 HERMES_DESKTOP_REMOTE_URL = "https://hermes.tiger-bushmaster.ts.net"
+
 {{- end }}
 {{- end -}}
 

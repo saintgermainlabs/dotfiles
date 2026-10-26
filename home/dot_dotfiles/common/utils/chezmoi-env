@@ -53,3 +53,12 @@ chezmoi_add_env() {
   printf '%s = "%s"\n' "$name" "$escaped" >> "$file"
   printf 'Added %s to %s\n' "$name" "$file"
 }
+
+## @description Alias of chezmoi_add_env: appends a variable to the [env] table in .chezmoidata/env.toml.
+## @category Chezmoi
+## @arg $1 string The variable as NAME=VALUE. See chezmoi_add_env.
+## @example
+##   chezmoi_add_var "EDITOR=nvim"
+chezmoi_add_var() {
+  chezmoi_add_env "$@"
+}

@@ -11,11 +11,7 @@ export CHEZMOI_HOME
 {{ template "source-common.tmpl" . }}
 
 # Role extras
-{{- if eq .role "local" }}
-[ -r "${DF_DIR}/local/env" ] && . "${DF_DIR}/local/env"
-{{- else if eq .role "remote" }}
-[ -r "${DF_DIR}/remote/env" ] && . "${DF_DIR}/remote/env"
-{{- end }}
+{{ template "source-role.tmpl" . }}
 
 # Optional modules (docker, etc.)
 {{ template "source-modules.tmpl" . }}
@@ -24,11 +20,11 @@ export CHEZMOI_HOME
 # activation re-prepends its pinned tools ahead of the paths.toml /usr/bin prepend.
 {{- if .modules.common }}
 {{- template "paths.tmpl" . }}
-[ -r "${DF_DIR}/common/init" ] && . "${DF_DIR}/common/init"
+_df_source "${DF_DIR}/common/init"
 {{- end }}
 
 # Machine-local, untracked overrides.
-[ -r ~/.zshrc.local ] && . ~/.zshrc.local
+_df_source ~/.zshrc.local
 
 # Colored Alacritty windows for ssh and AI agents
-[ -f ~/.config/alacritty/terminal-roles.sh ] && . ~/.config/alacritty/terminal-roles.sh
+_df_source ~/.config/alacritty/terminal-roles.sh

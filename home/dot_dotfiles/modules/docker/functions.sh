@@ -10,6 +10,18 @@ cps() {
   docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 }
 
+
+# Get a single container name
+## @category Docker
+## @description et a single container
+## @usage container_name supabase-db
+## @requires docker
+## @see docker-ps(1)
+get_container_name() {
+    docker ps --format '{{.Names}}' | grep -Fx "$1"
+}
+
+
 # Open a shell (or run a command) inside a container.
 # Usage: dsh <container> [command]
 ## @category Docker
@@ -150,6 +162,7 @@ container_id() {
 ## @see docker-ps(1)
 ## @see docker-inspect(1)
 ## @tags docker container labels find
+
 find_container() {
   local app_name="$1"
   local component="$2"
@@ -211,6 +224,117 @@ find_container() {
       docker inspect "$id"
       ;;
   esac
+}
+# Find a running Docker container by app.name and app.component.
+# Usage: cfind [-d] <app.name> <app.component>
+#        -d returns the full container ID; default returns the name.
+
+_app_container_id() {
+    if [ "$#" -ne 2 ]; then
+        echo "Usage: _app_container_id <app.name> <app.component>" >&2
+        return 2
+    fi
+
+    local app="$1"
+    local component="$2"
+    local ids
+
+    ids=$(docker ps -q \
+        --filter "label=app.name=$app" \
+        --filter "label=app.component=$component") || return 1
+
+    if [ -z "$ids" ]; then
+        echo "No running container found: $app / $component" >&2
+        return 1
+    fi
+
+    # Refuse to guess if multiple containers match.
+    if [ "$(printf '%s\n' "$ids" | wc -l)" -gt 1 ]; then
+        echo "Multiple running containers match $app / $component:" >&2
+        docker ps --filter "label=app.name=$app" \
+            --filter "label=app.component=$component" \
+            --format 'table {{.ID}}\t{{.Names}}\t{{.Status}}' >&2
+        echo "Use a specific container ID to disambiguate." >&2
+        return 2
+    fi
+
+    printf '%s\n' "$ids"
+}
+
+cfind() {
+    local mode="name"
+
+    if [ "${1:-}" = "-d" ]; then
+        mode="id"
+        shift
+    fi
+
+    if [ "$#" -ne 2 ]; then
+        echo "Usage: cfind [-d] <app.name> <app.component>" >&2
+        return 2
+    fi
+
+    local id
+    id=$(_app_container_id "$1" "$2") || return $?
+
+    if [ "$mode" = "id" ]; then
+        printf '%s\n' "$id"
+    else
+        docker inspect --format '{{.Name}}' "$id" |
+            sed 's#^/##'
+    fi
+}
+
+# Enter a container interactively.
+# Usage: cinto <app.name> <app.component> [shell]
+# Default shell: /bin/sh
+
+cinto() {
+    if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+        echo "Usage: cinto <app.name> <app.component> [shell]" >&2
+        return 2
+    fi
+
+    local app="$1"
+    local component="$2"
+    local shell="${3:-/bin/sh}"
+    local id
+
+    id=$(_app_container_id "$app" "$component") || return $?
+    docker exec -it "$id" "$shell"
+}
+
+# Execute a command in a container.
+# Usage: cexec <app.name> <app.component> <command> [args...]
+
+cexec() {
+    if [ "$#" -lt 3 ]; then
+        echo "Usage: cexec <app.name> <app.component> <command> [args...]" >&2
+        return 2
+    fi
+
+    local app="$1"
+    local component="$2"
+    shift 2
+
+    local id
+    id=$(_app_container_id "$app" "$component") || return $?
+    docker exec "$id" "$@"
+}
+
+# Restart a container.
+# Usage: crestart <app.name> <app.component>
+
+crestart() {
+    if [ "$#" -ne 2 ]; then
+        echo "Usage: crestart <app.name> <app.component>" >&2
+        return 2
+    fi
+
+    local id
+    id=$(_app_container_id "$1" "$2") || return $?
+
+    docker restart "$id"
 }
 
 ## @internal

@@ -1,0 +1,116 @@
+## @description Organizes files from the Downloads folder into Videos, Documents, and Images.
+## @category File Management
+## @arg -n, --dry-run Optional flag to simulate the moves without relocating files.
+## @arg $1 string Optional path to the source directory (defaults to ~/Downloads or XDG_DOWNLOAD_DIR).
+## @exitcode 0 If files were successfully moved or no eligible files were found.
+## @exitcode 1 If an unknown option is passed or the source directory does not exist.
+## @stderr Prints error messages if the source folder is missing or invalid flags are provided.
+## @example
+##   clean_downloads
+##   clean_downloads -n
+##   clean_downloads ~/CustomDownloads
+##   clean_downloads -n ~/CustomDownloads
+## @see mv(1)
+## @see xdg-user-dir(1)
+clean_downloads() {
+  local dry_run=0
+  local src_dir=""
+
+  # Parse flags and arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -n|--dry-run)
+        dry_run=1
+        shift
+        ;;
+      -*)
+        printf 'clean_downloads: unknown option: %s\n' "$1" >&2
+        return 1
+        ;;
+      *)
+        src_dir="$1"
+        shift
+        ;;
+    esac
+  done
+
+  # Default to ~/Downloads or XDG user directory if available
+  if [[ -z "$src_dir" ]]; then
+    if command -v xdg-user-dir >/dev/null 2>&1; then
+      src_dir="$(xdg-user-dir DOWNLOAD)"
+    else
+      src_dir="$HOME/Downloads"
+    fi
+  fi
+
+  if [[ ! -d "$src_dir" ]]; then
+    printf 'clean_downloads: directory does not exist: %s\n' "$src_dir" >&2
+    return 1
+  fi
+
+  # Resolve destination directories (fallback to standard XDG / home paths)
+  local docs_dir="${XDG_DOCUMENTS_DIR:-$HOME/Documents}"
+  local videos_dir="${XDG_VIDEOS_DIR:-$HOME/Videos}"
+  local images_dir="${XDG_PICTURES_DIR:-$HOME/Images}"
+
+  # If ~/Images does not exist but ~/Pictures does, respect ~/Images as requested
+  [[ ! -d "$images_dir" && -d "$HOME/Images" ]] && images_dir="$HOME/Images"
+
+  # Ensure destination directories exist if not in dry-run mode
+  if [[ "$dry_run" -eq 0 ]]; then
+    mkdir -p "$docs_dir" "$videos_dir" "$images_dir"
+  fi
+
+  local moved_count=0
+
+  # Loop only top-level files in the source directory (avoids recursing into subfolders)
+  local file
+  for file in "$src_dir"/*; do
+    [[ -f "$file" ]] || continue
+
+    local filename="${file##*/}"
+    local ext="${filename##*.}"
+    local dest_dir=""
+
+    # Map extensions to categories (case-insensitive)
+    case "${ext,,}" in
+      # Documents
+      pdf|doc|docx|txt|md|rtf|odt|pages|csv|xlsx|xls|pptx|ppt|epub|mobi)
+        dest_dir="$docs_dir"
+        ;;
+      # Videos
+      mp4|mkv|mov|avi|wmv|flv|webm|m4v|mpg|mpeg)
+        dest_dir="$videos_dir"
+        ;;
+      # Images
+      jpg|jpeg|png|gif|webp|svg|bmp|tiff|tif|ico|heic|raw)
+        dest_dir="$images_dir"
+        ;;
+      *)
+        continue
+        ;;
+    esac
+
+    # Handle filename collisions (e.g., file_1.ext if file.ext exists)
+    local target="$dest_dir/$filename"
+    if [[ -e "$target" ]]; then
+      local base="${filename%.*}"
+      local count=1
+      while [[ -e "$dest_dir/${base}_$count.$ext" ]]; do
+        ((count++))
+      done
+      target="$dest_dir/${base}_$count.$ext"
+    fi
+
+    if [[ "$dry_run" -eq 1 ]]; then
+      printf '[Dry Run] Would move: %s -> %s\n' "$filename" "$target"
+    else
+      mv -n "$file" "$target" && printf 'Moved: %s -> %s\n' "$filename" "$target"
+    fi
+    ((moved_count++))
+  done
+
+  if [[ "$moved_count" -eq 0 ]]; then
+    printf 'No eligible files found to organize in %s\n' "$src_dir"
+  fi
+}

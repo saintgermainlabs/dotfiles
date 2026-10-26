@@ -1,0 +1,12 @@
+# Loader config for the docker module — read by _df_load_module (~/.dotfiles/common/helpers.sh).
+# Order: env (set -a) -> files -> interactive -> bash|zsh. Paths are relative to this dir.
+# Module metadata for `manual` stays in module.sh (## @module ...).
+
+[bootstrap]
+files = [
+  "../../remote/remote_helpers.sh",  # remote_exec etc. (only present on role=remote)
+  "functions.sh",
+]
+interactive = []
+bash = ["completions.bash"]
+zsh = ["completions.zsh"]

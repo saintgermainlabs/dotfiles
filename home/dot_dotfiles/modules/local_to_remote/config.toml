@@ -1,0 +1,9 @@
+# Loader config for the local_to_remote module — read by _df_load_module (~/.dotfiles/common/helpers.sh).
+# Order: env (set -a) -> files -> interactive -> bash|zsh. Paths are relative to this dir.
+# Module metadata for `manual` stays in module.sh (## @module ...).
+
+[bootstrap]
+files = ["local_to_remote.sh"]
+interactive = []
+bash = ["completions.bash"]
+zsh = ["completions.zsh"]

@@ -1,0 +1,10 @@
+# Loader config for the coolify-manager module — read by _df_load_module (~/.dotfiles/common/helpers.sh).
+# Order: env (set -a) -> files -> interactive -> bash|zsh. Paths are relative to this dir.
+# Module metadata for `manual` stays in module.sh (## @module ...).
+
+[bootstrap]
+env = ["${XDG_CONFIG_HOME:-$HOME/.config}/coolify-manager/environment"]
+files = ["functions.sh"]
+interactive = ["aliases.sh"]
+bash = ["completions.bash"]
+zsh = ["completions.zsh"]

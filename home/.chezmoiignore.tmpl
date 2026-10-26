@@ -3,6 +3,12 @@
 /.chezmoidata/
 /.chezmoiignore.tmpl
 /.chezmoitemplates/
+/configs/
+/configs/dconf/
+
+# Secrets: live-only (~/.config/secrets/.env), never managed or added by chezmoi.
+.config/secrets/
+**/.env
 
 # Placeholders
 .gitkeep
@@ -60,7 +66,9 @@
 {{- end }}
 
 {{- if not (dig "common" false .modules) }}
-.dotfiles/common/
+.dotfiles/common/*
+# helpers.sh (_df_source, _df_load_module) is needed even without common.
+!.dotfiles/common/helpers.sh
 {{- end }}
 
 # --- Headless / remote: drop every desktop path when gui = false ---
@@ -74,10 +82,15 @@
 .config/thunar/
 .config/alacritty/
 .config/ulauncher/
+.config/environment.d/
 .cursor/
 .gemini/
 .local/bin/organize_downloads
 .local/bin/stash_clipboard_url
+.local/share/applications/Alacritty.desktop
+.local/share/applications/alacritty-remote.desktop
+.local/share/applications/alacritty-agent.desktop
+.local/share/icons/hicolor/256x256/apps/alacritty-*.png
 {{- else }}
 # GUI host: still respect per-module toggles
 {{- if not (dig "gui" false .modules) }}
@@ -104,10 +117,16 @@
 .dotfiles/local/
 .local/bin/openclaw-remote
 .dotfiles/modules/hermes-v2/
+.dotfiles/modules/local_to_remote/
 {{- end }}
 {{- if ne (dig "role" "remote" .) "remote" }}
 .dotfiles/remote/
-.dotfiles/modules/local_to_remote
+{{- end }}
+{{- if not (dig "local_to_remote" false .modules) }}
+.dotfiles/modules/local_to_remote/
 {{- end }}
 
 server_only/
+
+# Python bytecode caches (e.g. nemo-python extensions)
+**/__pycache__
