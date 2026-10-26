@@ -10,4 +10,8 @@ for _df in env aliases functions chezmoi-helpers.aliases chezmoi-helpers.functio
   _df_source "${DF_DIR}/{{ .role }}/${_df}"
 done
 unset _df
+{{- if eq .role "remote" }}
+# Interactive login banner (remote only)
+case $- in *i*) _df_source "${DF_DIR}/remote/scripts/remote-banner.sh" ;; esac
+{{- end }}
 {{- end }}

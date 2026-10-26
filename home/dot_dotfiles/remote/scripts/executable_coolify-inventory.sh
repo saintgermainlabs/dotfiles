@@ -1,22 +1,10 @@
 #!/usr/bin/env bash
-# coolify-inventory.sh — REMOTE SERVER banner + YAML inventory of Coolify compose stacks.
+# coolify-inventory.sh — YAML inventory of Coolify compose stacks.
 # Usage: coolify-inventory.sh [output.yaml]   (or COOLIFY_INVENTORY_OUT=...; COOLIFY_ROOT=/data/coolify)
 set -euo pipefail
 OUT="${1:-${COOLIFY_INVENTORY_OUT:-$HOME/coolify-inventory.yaml}}"
 ROOT="${COOLIFY_ROOT:-/data/coolify}"
 
-banner() {
-  printf '\033]0;REMOTE SERVER — %s\007' "$(hostname)"   # window title
-  if [ -t 1 ]; then printf '\033[2J\033[H'; fi
-  if command -v figlet >/dev/null 2>&1; then
-    printf '\033[1;36m'; figlet -w 120 "REMOTE SERVER"; printf '\033[0m'
-  else
-    local l="████████████████████████████████████████████"
-    printf '\033[1;36m%s\n██                                        ██\n██      R E M O T E   S E R V E R         ██\n██                                        ██\n%s\033[0m\n' "$l" "$l"
-  fi
-  printf '\033[1;33m  host: %s   user: %s\033[0m\n\n' "$(hostname)" "$(whoami)"
-}
-banner
 
 for d in "$ROOT/services" "$ROOT/applications"; do
   [ -d "$d" ] || { echo "(missing: $d)"; continue; }
