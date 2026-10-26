@@ -5,6 +5,10 @@
 CHEZMOI_HOME="$(realpath "$(chezmoi source-path 2>/dev/null)" 2>/dev/null)" || CHEZMOI_HOME=""
 [ -n "${CHEZMOI_HOME}" ] || CHEZMOI_HOME="${HOME}/.local/share/chezmoi/home"
 export CHEZMOI_HOME
+# CHEZMOI_CLONE_DIR: root of the cloned dotfiles repo (parent of the .chezmoiroot "home" dir).
+CHEZMOI_CLONE_DIR="$(git -C "${CHEZMOI_HOME}" rev-parse --show-toplevel 2>/dev/null)" || CHEZMOI_CLONE_DIR=""
+[ -n "${CHEZMOI_CLONE_DIR}" ] || CHEZMOI_CLONE_DIR="$(dirname "${CHEZMOI_HOME}")"
+export CHEZMOI_CLONE_DIR
 
 case $- in
     *i*) ;;

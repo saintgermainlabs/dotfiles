@@ -3,3 +3,6 @@
 # (e.g. ~/.bashrc.local or ~/.dotfiles/dot_env/.env), not here.
 
 export DOTFILES_ROLE=local
+
+export UAW_DIR="$HOME/Agents/universal-agents-workspace"
+export SECOND_BRAIN_DIR="$HOME/obsidian-vaults/agent/second-brain"

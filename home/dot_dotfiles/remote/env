@@ -1,3 +1,7 @@
 # Remote (headless server) defaults.
 
 export DOTFILES_ROLE=remote
+
+export UAW_DIR="$HOME/Agents/universal-agents-workspace"
+# TODO: fill in the server second-brain path later
+export SECOND_BRAIN_DIR=""
