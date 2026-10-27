@@ -15,3 +15,4 @@ Applied to `~/.dotfiles/remote/scripts/`. Gated by `.chezmoiignore.tmpl`
   (override with arg or `COOLIFY_INVENTORY_OUT`; root via `COOLIFY_ROOT`).
   May need `sudo` to read `/data/coolify`.
 - `coolify-inventory.sh summary [--refresh] [--tsv] [file]` — readable tree of projects/stacks/services from the raw inventory (alias: `list`).
+  Add `--yaml` (or `--format yaml`; also `--format tsv|text`) for structured YAML: `projects: {<project>: {stacks: [{name,id,root,environment,services: [{name,component,image,container_name,running}]}]}}`. Works identically for `summary` and `list`.
