@@ -5,7 +5,7 @@
 #   paths stack dirs, compose files, volumes/bind mounts, working_dir, build context -> ~/data/inv/coolify-paths.yaml
 #   summary  human-readable tree of existing raw YAML (project/stack/service/component/image/container);
 #            add --refresh (or -r) to regenerate raw first; --tsv for tab-separated rows;
-#            --yaml (or --format yaml|tsv|text): YAML keyed project -> stack name -> service name, merged with
+#            --yaml (or --format yaml|tsv|text): YAML keyed project -> stack_name (app.name) -> service name, merged with
 #            paths info (stack_dir, volumes, env_file...) from coolify-paths.yaml if present;
 #            --by-name writes it to ~/data/inv/coolify-by-name.yaml (--out=FILE for another path)
 #   COOLIFY_INVENTORY_OUT=... overrides output; COOLIFY_ROOT=/data/coolify
@@ -46,7 +46,7 @@ if ym:
     Y = {"paths_source": os.environ.get("PATHS_IN") if PI else None, "source": sys.argv[1], "host": inv.get("host"), "generated": inv.get("generated"), "projects": {}}
     print = lambda *a, **k: None
 print(f"# {sys.argv[1]}  host={inv.get('host')}  generated={inv.get('generated')}") if not tsv else \
-  print("root\tproject\tstack\tstack_id\tservice\tcomponent\timage\tcontainer_name\trunning")
+  print("root\tproject\tstack_name\tstack_id\tservice\tcomponent\timage\tcontainer_name\trunning")
 tot = 0
 for kind, r in (inv.get("roots") or {}).items():
     stacks = r.get("stacks") or []
@@ -54,11 +54,12 @@ for kind, r in (inv.get("roots") or {}).items():
     for st in stacks:
         svcs = [e for cf in st.get("compose_files") or [] for e in cf.get("services") or []]
         lb = lambda k: next((e.get("labels", {}).get(k) for e in svcs if (e.get("labels") or {}).get(k)), None)
-        name = next((e.get("app.name") for e in svcs if e.get("app.name")), None) \
+        # stack_name: docker label app.name (names the whole stack) > coolify.resourceName > compose project > id
+        name = next((e.get("app.name") or (e.get("labels") or {}).get("app.name") for e in svcs if e.get("app.name") or (e.get("labels") or {}).get("app.name")), None) \
                or (lb("coolify.resourceName") or "").removesuffix("-" + st["id"]) or lb("com.docker.compose.project") or st["id"]
         proj = lb("coolify.projectName") or "-"; env = lb("coolify.environmentName")
         if not tsv:
-            print(f"  [{proj}{'/'+env if env and env!='production' else ''}] {name}  ({st['id']})" + ("  (no compose)" if not svcs else ""))
+            print(f"  [{proj}{'/'+env if env and env!='production' else ''}] stack: {name}  (id {st['id']})" + ("  (no compose)" if not svcs else ""))
         for e in svcs:
             tot += 1
             row = [kind, proj, name, st["id"], e.get("name") or e.get("error", "?"), e.get("app.component") or "",
@@ -67,11 +68,11 @@ for kind, r in (inv.get("roots") or {}).items():
                 P = Y["projects"].setdefault(proj, {"stacks": {}})
                 key = name if name not in P["stacks"] or P["stacks"][name]["id"] == st["id"] else f"{name} ({st['id']})"
                 ps = PS.get((kind, st["id"])) or {}
-                S = P["stacks"].setdefault(key, {"id": st["id"], "root": kind, "environment": env,
+                S = P["stacks"].setdefault(key, {"stack_name": name, "id": st["id"], "root": kind, "environment": env,
                                                  "stack_dir": ps.get("stack_dir") or st.get("path"),
                                                  "compose_files": [cf.get("file") for cf in st.get("compose_files") or []], "services": {}})
                 pe = PSV.get((kind, st["id"], row[4])) or {}
-                sv = {k: v for k, v in {"component": row[5] or None, "image": row[6] or None, "container_name": row[7] or None,
+                sv = {k: v for k, v in {"stack_name": name, "stack_id": st["id"], "component": row[5] or None, "image": row[6] or None, "container_name": row[7] or None,
                       "running": bool(row[8]), "working_dir": pe.get("working_dir"), "build_context": pe.get("build_context"),
                       "env_file": pe.get("env_file"), "volumes": pe.get("volumes"), "live_mounts": pe.get("live_mounts")}.items() if v is not None}
                 S["services"][row[4]] = sv
