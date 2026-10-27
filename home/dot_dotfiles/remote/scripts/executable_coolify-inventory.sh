@@ -5,7 +5,9 @@
 #   paths stack dirs, compose files, volumes/bind mounts, working_dir, build context -> ~/data/inv/coolify-paths.yaml
 #   summary  human-readable tree of existing raw YAML (project/stack/service/component/image/container);
 #            add --refresh (or -r) to regenerate raw first; --tsv for tab-separated rows;
-#            --yaml (or --format yaml|tsv|text) for structured YAML projects/stacks/services
+#            --yaml (or --format yaml|tsv|text): YAML keyed project -> stack name -> service name, merged with
+#            paths info (stack_dir, volumes, env_file...) from coolify-paths.yaml if present;
+#            --by-name writes it to ~/data/inv/coolify-by-name.yaml (--out=FILE for another path)
 #   COOLIFY_INVENTORY_OUT=... overrides output; COOLIFY_ROOT=/data/coolify
 set -euo pipefail
 MODE=raw
@@ -13,23 +15,36 @@ case "${1:-}" in
   raw|paths|summary|list) MODE="$1"; shift ;;
   --mode=*) MODE="${1#--mode=}"; shift ;;
   --mode) MODE="${2:?}"; shift 2 ;;
-  -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
+  -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
 esac
 [ "$MODE" = list ] && MODE=summary
 case "$MODE" in raw|paths|summary) ;; *) echo "unknown mode: $MODE (raw|paths|summary)" >&2; exit 2 ;; esac
 if [ "$MODE" = summary ]; then
-  REFRESH=0; TSV=0; IN=""
+  REFRESH=0; TSV=0; IN=""; OUTF=""
   while [ $# -gt 0 ]; do case "$1" in -r|--refresh) REFRESH=1 ;; --tsv) TSV=1 ;; --yaml) TSV=yaml ;;
+    --out=*) OUTF="${1#--out=}"; TSV=yaml ;;
+    --by-name) OUTF="${COOLIFY_BYNAME_OUT:-$HOME/data/inv/coolify-by-name.yaml}"; TSV=yaml ;;
     --format=*|--format) if [ "$1" = --format ]; then F="${2:?}"; shift; else F="${1#--format=}"; fi
       case "$F" in yaml|yml) TSV=yaml ;; tsv) TSV=1 ;; text|human) TSV=0 ;; *) echo "bad format: $F (text|tsv|yaml)" >&2; exit 2 ;; esac ;;
     *) IN="$1" ;; esac; shift; done
   IN="${IN:-${COOLIFY_INVENTORY_OUT:-$HOME/data/inv/coolify-inventory.yaml}}"
-  [ "$REFRESH" = 1 ] && "$0" raw "$IN" >/dev/null
+  PATHS_IN="${COOLIFY_PATHS_IN:-$HOME/data/inv/coolify-paths.yaml}"
+  [ "$REFRESH" = 1 ] && "$0" raw "$IN" >/dev/null && { [ "$TSV" = yaml ] && "$0" paths "$PATHS_IN" >/dev/null || true; }
+  if [ -n "$OUTF" ]; then mkdir -p "$(dirname "$OUTF")"; "$0" summary --yaml "$IN" > "$OUTF"; echo "Wrote $OUTF" >&2; exit 0; fi
+  export PATHS_IN
   [ -f "$IN" ] || { echo "no inventory: $IN (run: $0 raw, or summary --refresh)" >&2; exit 1; }
   exec python3 - "$IN" "$TSV" <<'PY'
 import sys, yaml, signal; signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 inv = yaml.safe_load(open(sys.argv[1])) or {}; tsv = sys.argv[2] == "1"; ym = sys.argv[2] == "yaml"
-if ym: tsv = True; Y = {"source": sys.argv[1], "host": inv.get("host"), "generated": inv.get("generated"), "projects": {}}; out_print = print; print = lambda *a, **k: None
+if ym:
+    tsv = True
+    import os
+    try: PI = yaml.safe_load(open(os.environ.get("PATHS_IN",""))) or {}
+    except Exception: PI = {}
+    PS = {(k, st["id"]): st for k, r in (PI.get("roots") or {}).items() for st in r.get("stacks") or []}
+    PSV = {(k, st["id"], e.get("name")): e for (k, _), st in PS.items() for cf in st.get("compose_files") or [] for e in cf.get("services") or []}
+    Y = {"paths_source": os.environ.get("PATHS_IN") if PI else None, "source": sys.argv[1], "host": inv.get("host"), "generated": inv.get("generated"), "projects": {}}
+    print = lambda *a, **k: None
 print(f"# {sys.argv[1]}  host={inv.get('host')}  generated={inv.get('generated')}") if not tsv else \
   print("root\tproject\tstack\tstack_id\tservice\tcomponent\timage\tcontainer_name\trunning")
 tot = 0
@@ -50,16 +65,22 @@ for kind, r in (inv.get("roots") or {}).items():
                    e.get("image") or "", e.get("container_name") or "", "yes" if e.get("running") else ""]
             if ym:
                 P = Y["projects"].setdefault(proj, {"stacks": {}})
-                S = P["stacks"].setdefault(st["id"], {"name": name, "id": st["id"], "root": kind, "environment": env, "services": []})
-                S["services"].append({"name": row[4], "component": row[5] or None, "image": row[6] or None,
-                                      "container_name": row[7] or None, "running": bool(row[8])})
+                key = name if name not in P["stacks"] or P["stacks"][name]["id"] == st["id"] else f"{name} ({st['id']})"
+                ps = PS.get((kind, st["id"])) or {}
+                S = P["stacks"].setdefault(key, {"id": st["id"], "root": kind, "environment": env,
+                                                 "stack_dir": ps.get("stack_dir") or st.get("path"),
+                                                 "compose_files": [cf.get("file") for cf in st.get("compose_files") or []], "services": {}})
+                pe = PSV.get((kind, st["id"], row[4])) or {}
+                sv = {k: v for k, v in {"component": row[5] or None, "image": row[6] or None, "container_name": row[7] or None,
+                      "running": bool(row[8]), "working_dir": pe.get("working_dir"), "build_context": pe.get("build_context"),
+                      "env_file": pe.get("env_file"), "volumes": pe.get("volumes"), "live_mounts": pe.get("live_mounts")}.items() if v is not None}
+                S["services"][row[4]] = sv
             if tsv: print("\t".join(map(str, row)))
             else:
                 comp = f" <{row[5]}>" if row[5] else ""
                 print(f"    - {row[4]}{comp}  {row[6] or '(build)'}" + (f"  ⟶ {row[7]}" if row[7] else "") + ("  ●" if row[8] else ""))
 if not tsv: print(f"\n{tot} services total  (● = running)")
 if ym:
-    for P in Y["projects"].values(): P["stacks"] = list(P["stacks"].values())
     Y["total_services"] = tot
     sys.stdout.write(yaml.safe_dump(Y, sort_keys=False, allow_unicode=True))
 PY
