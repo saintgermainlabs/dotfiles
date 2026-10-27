@@ -14,3 +14,4 @@ Applied to `~/.dotfiles/remote/scripts/`. Gated by `.chezmoiignore.tmpl`
   service name/image/container_name). Default out: `~/coolify-inventory.yaml`
   (override with arg or `COOLIFY_INVENTORY_OUT`; root via `COOLIFY_ROOT`).
   May need `sudo` to read `/data/coolify`.
+- `coolify-inventory.sh summary [--refresh] [--tsv] [file]` — readable tree of projects/stacks/services from the raw inventory (alias: `list`).

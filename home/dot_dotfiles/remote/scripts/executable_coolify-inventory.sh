@@ -1,18 +1,55 @@
 #!/usr/bin/env bash
 # coolify-inventory.sh — YAML inventory of Coolify compose stacks.
-# Usage: coolify-inventory.sh [raw|paths] [output.yaml]   (also --mode=raw|paths)
+# Usage: coolify-inventory.sh [raw|paths|summary] [file.yaml]   (also --mode=...)
 #   raw   (default) full inventory -> ~/data/inv/coolify-inventory.yaml
 #   paths stack dirs, compose files, volumes/bind mounts, working_dir, build context -> ~/data/inv/coolify-paths.yaml
+#   summary  human-readable tree of existing raw YAML (project/stack/service/component/image/container);
+#            add --refresh (or -r) to regenerate raw first; --tsv for tab-separated rows
 #   COOLIFY_INVENTORY_OUT=... overrides output; COOLIFY_ROOT=/data/coolify
 set -euo pipefail
 MODE=raw
 case "${1:-}" in
-  raw|paths) MODE="$1"; shift ;;
+  raw|paths|summary|list) MODE="$1"; shift ;;
   --mode=*) MODE="${1#--mode=}"; shift ;;
   --mode) MODE="${2:?}"; shift 2 ;;
-  -h|--help) sed -n '2,6p' "$0"; exit 0 ;;
+  -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
 esac
-case "$MODE" in raw|paths) ;; *) echo "unknown mode: $MODE (raw|paths)" >&2; exit 2 ;; esac
+[ "$MODE" = list ] && MODE=summary
+case "$MODE" in raw|paths|summary) ;; *) echo "unknown mode: $MODE (raw|paths|summary)" >&2; exit 2 ;; esac
+if [ "$MODE" = summary ]; then
+  REFRESH=0; TSV=0; IN=""
+  for a in "$@"; do case "$a" in -r|--refresh) REFRESH=1 ;; --tsv) TSV=1 ;; *) IN="$a" ;; esac; done
+  IN="${IN:-${COOLIFY_INVENTORY_OUT:-$HOME/data/inv/coolify-inventory.yaml}}"
+  [ "$REFRESH" = 1 ] && "$0" raw "$IN" >/dev/null
+  [ -f "$IN" ] || { echo "no inventory: $IN (run: $0 raw, or summary --refresh)" >&2; exit 1; }
+  exec python3 - "$IN" "$TSV" <<'PY'
+import sys, yaml, signal; signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+inv = yaml.safe_load(open(sys.argv[1])) or {}; tsv = sys.argv[2] == "1"
+print(f"# {sys.argv[1]}  host={inv.get('host')}  generated={inv.get('generated')}") if not tsv else \
+  print("root\tproject\tstack\tstack_id\tservice\tcomponent\timage\tcontainer_name\trunning")
+tot = 0
+for kind, r in (inv.get("roots") or {}).items():
+    stacks = r.get("stacks") or []
+    if not tsv: print(f"\n== {kind} ({len(stacks)} stacks) — {r.get('path')}")
+    for st in stacks:
+        svcs = [e for cf in st.get("compose_files") or [] for e in cf.get("services") or []]
+        lb = lambda k: next((e.get("labels", {}).get(k) for e in svcs if (e.get("labels") or {}).get(k)), None)
+        name = next((e.get("app.name") for e in svcs if e.get("app.name")), None) \
+               or (lb("coolify.resourceName") or "").removesuffix("-" + st["id"]) or lb("com.docker.compose.project") or st["id"]
+        proj = lb("coolify.projectName") or "-"; env = lb("coolify.environmentName")
+        if not tsv:
+            print(f"  [{proj}{'/'+env if env and env!='production' else ''}] {name}  ({st['id']})" + ("  (no compose)" if not svcs else ""))
+        for e in svcs:
+            tot += 1
+            row = [kind, proj, name, st["id"], e.get("name") or e.get("error", "?"), e.get("app.component") or "",
+                   e.get("image") or "", e.get("container_name") or "", "yes" if e.get("running") else ""]
+            if tsv: print("\t".join(map(str, row)))
+            else:
+                comp = f" <{row[5]}>" if row[5] else ""
+                print(f"    - {row[4]}{comp}  {row[6] or '(build)'}" + (f"  ⟶ {row[7]}" if row[7] else "") + ("  ●" if row[8] else ""))
+if not tsv: print(f"\n{tot} services total  (● = running)")
+PY
+fi
 if [ "$MODE" = paths ]; then DEF="$HOME/data/inv/coolify-paths.yaml"; else DEF="$HOME/data/inv/coolify-inventory.yaml"; fi
 OUT="${1:-${COOLIFY_INVENTORY_OUT:-$DEF}}"
 mkdir -p "$(dirname "$OUT")"
