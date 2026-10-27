@@ -8,17 +8,58 @@
 #            --yaml (or --format yaml|tsv|text): YAML keyed project -> stack_name (app.name) -> service name, merged with
 #            paths info (stack_dir, volumes, env_file...) from coolify-paths.yaml if present;
 #            --by-name writes it to ~/data/inv/coolify-by-name.yaml (--out=FILE for another path)
+#   get|lookup <stack_name> [component]   (or --name X [--component Y]) print the YAML block for a stack (app.name)
+#            or one service (matched by app.component, else service key) from ~/data/inv/coolify-by-name.yaml;
+#            -r/--refresh regenerates it first (also auto-generated if missing); --file=F other by-name file
 #   COOLIFY_INVENTORY_OUT=... overrides output; COOLIFY_ROOT=/data/coolify
 set -euo pipefail
 MODE=raw
 case "${1:-}" in
-  raw|paths|summary|list) MODE="$1"; shift ;;
+  raw|paths|summary|list|get|lookup) MODE="$1"; shift ;;
   --mode=*) MODE="${1#--mode=}"; shift ;;
   --mode) MODE="${2:?}"; shift 2 ;;
-  -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
+  -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
 esac
 [ "$MODE" = list ] && MODE=summary
-case "$MODE" in raw|paths|summary) ;; *) echo "unknown mode: $MODE (raw|paths|summary)" >&2; exit 2 ;; esac
+[ "$MODE" = lookup ] && MODE=get
+case "$MODE" in raw|paths|summary|get) ;; *) echo "unknown mode: $MODE (raw|paths|summary|get)" >&2; exit 2 ;; esac
+if [ "$MODE" = get ]; then
+  LN=""; LC=""; REFRESH=0; BYN="${COOLIFY_BYNAME_OUT:-$HOME/data/inv/coolify-by-name.yaml}"
+  while [ $# -gt 0 ]; do case "$1" in
+    -r|--refresh) REFRESH=1 ;;
+    --name=*) LN="${1#--name=}" ;; --name|-n) LN="${2:?}"; shift ;;
+    --component=*) LC="${1#--component=}" ;; --component|-c) LC="${2:?}"; shift ;;
+    --file=*) BYN="${1#--file=}" ;;
+    -*) echo "unknown option: $1" >&2; exit 2 ;;
+    *) if [ -z "$LN" ]; then LN="$1"; elif [ -z "$LC" ]; then LC="$1"; else echo "extra arg: $1" >&2; exit 2; fi ;;
+  esac; shift; done
+  [ -n "$LN" ] || { echo "usage: $0 get <stack_name> [component]  |  lookup --name X [--component Y]" >&2; exit 2; }
+  if [ "$REFRESH" = 1 ] || [ ! -f "$BYN" ]; then "$0" summary --refresh --out="$BYN" || exit 1; fi
+  exec python3 - "$BYN" "$LN" "$LC" <<'PY'
+import sys, yaml
+f, name, comp = sys.argv[1:4]
+Y = yaml.safe_load(open(f)) or {}
+hits = [(p, k, S) for p, P in (Y.get("projects") or {}).items() for k, S in ((P or {}).get("stacks") or {}).items()
+        if name in (k, S.get("stack_name"), S.get("id"))]
+if not hits:
+    names = sorted({S.get("stack_name") or k for P in (Y.get("projects") or {}).values() for k, S in ((P or {}).get("stacks") or {}).items()})
+    sys.exit(f"no stack '{name}' in {f}\navailable: " + ", ".join(names))
+out = {}
+for p, k, S in hits:
+    if comp:
+        sv = {n: v for n, v in (S.get("services") or {}).items() if v.get("component") == comp} \
+             or {n: v for n, v in (S.get("services") or {}).items() if n == comp}
+        if not sv: continue
+        out.setdefault(p, {}).setdefault(k, {"stack_name": S.get("stack_name"), "id": S.get("id"), "stack_dir": S.get("stack_dir"), "services": {}})["services"].update(sv)
+    else:
+        out.setdefault(p, {})[k] = S
+if not out:
+    avail = sorted({v.get("component") or n for _, _, S in hits for n, v in (S.get("services") or {}).items()})
+    sys.exit(f"no component '{comp}' in stack '{name}'\navailable: " + ", ".join(avail))
+print(f"# {f}  (generated {Y.get('generated')})")
+sys.stdout.write(yaml.safe_dump({"projects": {p: {"stacks": st} for p, st in out.items()}}, sort_keys=False, allow_unicode=True))
+PY
+fi
 if [ "$MODE" = summary ]; then
   REFRESH=0; TSV=0; IN=""; OUTF=""
   while [ $# -gt 0 ]; do case "$1" in -r|--refresh) REFRESH=1 ;; --tsv) TSV=1 ;; --yaml) TSV=yaml ;;
